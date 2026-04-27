@@ -127,8 +127,8 @@ Use `analysis.json` as the single data source. It must include:
 - `features`: feature names, business role, UI/page location, related files, APIs, crypto references, mock data.
 - `apis`: method, URL, base URL, path, query, headers, body, auth, content type, request construction, mocks, response hints, errors.
 - `crypto`: algorithms, key/iv/signature sources, call sites, reuse scope, generated Node/Python helper scripts.
-- `configs`: appids, base URLs, envs, tokens, ak/sk, feature flags, storage keys, build/channel values.
-- `accounts`: discovered default/test accounts, passwords, phone numbers, emails, tenant/org identifiers.
+- `configs`: appids, base URLs, envs, tokens, ak/sk, API keys, client/app secrets, private keys, DB/Redis/Mongo/Postgres/MySQL connection strings, Authorization headers, JWTs, webhooks, SMTP credentials, payment keys, cloud provider credentials, AI/DevOps service tokens, feature flags, storage keys, build/channel values.
+- `accounts`: discovered default/test accounts, usernames, passwords/passphrases, phone numbers, emails, tenant/org identifiers, and credential pairs inferred from literal objects or config assignments.
 - `externalAssets`: APK/IPA/H5 downloads, GitLab/GitHub/Gitee, Nacos, Swagger/Knife4j, OSS/COS/S3/CDN, monitoring, webhook, registry, CI/CD, service discovery.
 - `developerSignals`: names, emails, phones, source-map local paths, package maintainers, comments, build host/user hints.
 - `operationsSignals`: gateways, logging, tracing, monitoring, config centers, service discovery, CI/CD, container/registry hints.
@@ -149,6 +149,7 @@ Prioritize findings that help an engineer understand and operate the project:
 - API shape inference: derive path/query parameters from URL strings, request body/query examples from wrapper second arguments and same-file call-site object literals, and response hints from direct `res.data` / `success(res)` usage. Mark these as static inferred mocks unless confirmed by source docs or runtime evidence.
 - Project shape: routes, pages, chunks, modules, feature names, menu/permission codes, i18n keys, event names.
 - Runtime environment: dev/test/stage/pre/prod endpoints, WebSocket/SSE/MQTT/GraphQL, uploads/downloads.
+- Sensitive values: hardcoded passwords/passphrases, default/test accounts, API keys, OAuth/client secrets, access/refresh/JWT tokens, Authorization headers, cookies/sessions, private keys/cert key material, database/Redis/Mongo/Postgres/MySQL credential URLs, cloud access keys, webhooks, SMTP credentials, payment keys, AI service keys, and DevOps tokens.
 - External resources: APK/IPA, repositories, Nacos/Apollo/Consul/Eureka, Swagger/Knife4j, Jenkins/GitLab CI, Harbor, SonarQube, OSS/COS/S3/MinIO/CDN.
 - People and operations: emails, phones, company/department names, source-map paths, build machine users, error reporting, monitoring, webhooks.
 - Crypto: shared signature/encryption helpers should be modeled once and referenced by all dependent features/APIs.

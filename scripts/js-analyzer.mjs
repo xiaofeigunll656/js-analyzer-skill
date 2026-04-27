@@ -57,6 +57,9 @@ const IP_RE = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_RE = /(?:\+?86[- ]?)?\b1[3-9]\d{9}\b/g;
 const SOURCE_PATH_RE = /(?:[A-Za-z]:\\(?:Users|workspace|work|jenkins|build)\\[^"'`\s]+|\/(?:Users|home|workspace|var\/lib\/jenkins|builds)\/[^"'`\s]+)/g;
+const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|passphrase|passcode|secret|token|authorization|auth|bearer|cookie|session|jwt|credential|private[_-]?key|client[_-]?secret|app[_-]?secret|api[_-]?key|apikey|x[_-]?api[_-]?key|access[_-]?key|secret[_-]?key|access[_-]?key[_-]?id|access[_-]?key[_-]?secret|ak|sk|secretid|secretkey|security[_-]?token|signature|signing[_-]?key|webhook|dsn|connection[_-]?string|connstr|jdbc|mongo(?:db)?[_-]?uri|redis[_-]?url|database[_-]?url|db[_-]?(?:user|username|password|passwd|pwd)|smtp[_-]?(?:user|username|password|passwd|pwd)|mail[_-]?password|mch[_-]?key|pay[_-]?key|api[_-]?v3[_-]?key|merchant[_-]?key|alipay[_-]?private[_-]?key|wechat[_-]?pay[_-]?key|github[_-]?token|gitlab[_-]?token|npm[_-]?token|sonar[_-]?token|sentry[_-]?auth[_-]?token|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|gemini[_-]?api[_-]?key|cohere[_-]?api[_-]?key|huggingface[_-]?token|hf[_-]?token|pinecone[_-]?api[_-]?key|langchain[_-]?api[_-]?key|account|username|user[_-]?name|phone|mobile|email|appid|app[_-]?id|tenant[_-]?id|org[_-]?id|bucket|region)/i;
+const ACCOUNT_KEY_RE = /(?:account|username|user[_-]?name|login[_-]?name|phone|mobile|email|password|passwd|pwd|passphrase|passcode)/i;
+const CREDENTIAL_VALUE_KEY_RE = /(?:password|passwd|pwd|passphrase|passcode|secret|token|authorization|auth|bearer|cookie|session|jwt|credential|private[_-]?key|client[_-]?secret|app[_-]?secret|api[_-]?key|apikey|x[_-]?api[_-]?key|access[_-]?key|secret[_-]?key|access[_-]?key[_-]?id|access[_-]?key[_-]?secret|ak|sk|secretid|secretkey|security[_-]?token|signature|signing[_-]?key|webhook|dsn|connection[_-]?string|connstr|jdbc|mongo(?:db)?[_-]?uri|redis[_-]?url|database[_-]?url|db[_-]?(?:user|username|password|passwd|pwd)|smtp[_-]?(?:user|username|password|passwd|pwd)|mail[_-]?password|mch[_-]?key|pay[_-]?key|api[_-]?v3[_-]?key|merchant[_-]?key|alipay[_-]?private[_-]?key|wechat[_-]?pay[_-]?key|github[_-]?token|gitlab[_-]?token|npm[_-]?token|sonar[_-]?token|sentry[_-]?auth[_-]?token|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|gemini[_-]?api[_-]?key|cohere[_-]?api[_-]?key|huggingface[_-]?token|hf[_-]?token|pinecone[_-]?api[_-]?key|langchain[_-]?api[_-]?key)/i;
 
 function usage(exitCode = 0) {
   const text = `
@@ -2079,7 +2082,7 @@ function extractVirtualSourcesFromSourceMap(shard, file, text, project, options)
 
 function maybeRedact(value, category, options) {
   if (!options.redactSecrets) return value;
-  if (!/(secret|token|password|passwd|pwd|ak|sk|key|appid|account|phone|email|authorization|cookie|session|dsn)/i.test(category)) {
+  if (!/(secret|token|password|passwd|pwd|passphrase|passcode|ak|sk|key|appid|account|phone|mobile|email|authorization|cookie|session|credential|private|webhook|dsn|connection|string|jwt|bearer|basic|smtp|db|database|mongo|redis|mch|merchant|pay)/i.test(category)) {
     return value;
   }
   const str = String(value ?? "");
@@ -2157,6 +2160,7 @@ function extractApis(shard, file, text, options) {
   const clientBaseUrls = extractClientBaseUrls(text, stringConstants);
   const functionRanges = collectNamedFunctionRanges(text);
   const webpackDataFlow = collectWebpackModuleDataFlow(text, functionRanges);
+  const requestWrappers = collectRequestWrapperFunctions(text, functionRanges, stringConstants);
   const apiMatches = [];
   collectApiMatches(apiMatches, text, /\baxios\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(\s*(['"`])([^'"`]{1,600})\2/gi, null, 3, "axios-method", 1, stringConstants);
   collectApiMatches(apiMatches, text, /\bXMLHttpRequest\s*\(\s*\)[\s\S]{0,500}?\.open\s*\(\s*(['"`])([A-Z]+)\1\s*,\s*(['"`])([^'"`]{1,600})\3/gi, null, 4, "xhr-open", 2, stringConstants);
@@ -2221,7 +2225,7 @@ function extractApis(shard, file, text, options) {
   for (const match of findAll(objectCallRe, text)) {
     const block = match[1];
     const url = extractObjectUrl(block, stringConstants, ["url", "uri", "path"]);
-    if (!url) continue;
+    if (!url || !looksLikeApiUrl(url)) continue;
     const method = extractObjectString(block, ["method", "type"]) || "GET";
     const requestInference = inferRequestFromObjectBlock(block, method, text, match.index, functionRanges, webpackDataFlow);
     const responseInference = inferResponseFromSnippet(block);
@@ -2243,7 +2247,7 @@ function extractApis(shard, file, text, options) {
   for (const match of findAll(wxCallRe, text)) {
     const block = match[1];
     const url = extractObjectUrl(block, stringConstants, ["url", "uri", "path"]);
-    if (!url) continue;
+    if (!url || !looksLikeApiUrl(url)) continue;
     const method = extractObjectString(block, ["method"]) || "GET";
     const requestInference = inferRequestFromObjectBlock(block, method, text, match.index, functionRanges, webpackDataFlow);
     const responseInference = inferResponseFromSnippet(block);
@@ -2257,6 +2261,93 @@ function extractApis(shard, file, text, options) {
         ...requestInference,
         ...responseInference,
         headerKeys: extractObjectKeys(block, ["header", "headers"])
+      }
+    });
+  }
+
+  for (const wrapper of requestWrappers) {
+    const callRe = new RegExp(`\\b${escapeRegex(wrapper.name)}\\s*\\(`, "g");
+    for (const match of findAll(callRe, text)) {
+      if (match.index >= wrapper.start && match.index <= wrapper.end) continue;
+      const call = splitCallArguments(text, match.index + match[0].length - 1, 3200);
+      if (!call || call.args.length === 0) continue;
+
+      if (wrapper.mode === "url-arg") {
+        const rawUrlArg = call.args[wrapper.paramIndex ?? 0] || "";
+        const url = resolveUrlExpression(rawUrlArg, stringConstants);
+        if (!url || !looksLikeApiUrl(url)) continue;
+        const method = resolveWrapperCallMethod(wrapper, call, stringConstants);
+        const requestInference = inferRequestFromWrapperCallArgs(wrapper, call, method, text, match.index, functionRanges, webpackDataFlow);
+        const responseInference = inferResponseFromSnippet(responseSnippetAfterCall(text, call.end));
+        apiMatches.push({
+          method,
+          url: joinBaseUrl(wrapper.baseUrl, url),
+          index: match.index,
+          extractor: "request-wrapper-url-callsite",
+          confidence: wrapper.baseUrl ? 0.86 : 0.8,
+          metadata: {
+            wrapperFunction: wrapper.name,
+            wrapperParam: wrapper.param,
+            wrapperMode: wrapper.mode,
+            inferredBaseUrl: wrapper.baseUrl,
+            rawExpression: rawUrlArg.trim().slice(0, 1000),
+            ...requestInference,
+            ...responseInference
+          }
+        });
+        continue;
+      }
+
+      const objectArg = call.args.find((arg) => arg.trim().startsWith("{"));
+      if (!objectArg) continue;
+      const url = extractObjectUrl(objectArg, stringConstants, ["url", "uri", "path", "api", "apiUrl"]);
+      if (!url || !looksLikeApiUrl(url)) continue;
+      const method = extractObjectString(objectArg, ["method", "type", "meth"]) || wrapper.defaultMethod || "GET";
+      const requestInference = inferRequestFromObjectBlock(objectArg, method, text, match.index, functionRanges, webpackDataFlow);
+      const responseInference = inferResponseFromSnippet(responseSnippetAfterCall(text, call.end));
+      apiMatches.push({
+        method: method.toUpperCase(),
+        url: joinBaseUrl(wrapper.baseUrl, url),
+        index: match.index,
+        extractor: "request-wrapper-object-callsite",
+        confidence: wrapper.baseUrl ? 0.88 : 0.84,
+        metadata: {
+          wrapperFunction: wrapper.name,
+          wrapperParam: wrapper.param,
+          inferredBaseUrl: wrapper.baseUrl,
+          rawExpression: objectArg.trim().slice(0, 1000),
+          ...requestInference,
+          ...responseInference
+        }
+      });
+    }
+  }
+
+  for (const wrapper of requestWrappers) {
+    if (wrapper.mode === "url-arg") continue;
+    const fn = functionRanges.find((candidate) => candidate.name === wrapper.name && candidate.start === wrapper.start);
+    const paramIndex = wrapper.paramIndex ?? 0;
+    const callsiteMock = webpackParamMockForFunction(webpackDataFlow, fn, paramIndex);
+    const url = callsiteMock.url || callsiteMock.uri || callsiteMock.path || callsiteMock.api || callsiteMock.apiUrl || "";
+    if (!url || !looksLikeApiUrl(url)) continue;
+    const method = callsiteMock.method || callsiteMock.type || callsiteMock.meth || wrapper.defaultMethod || "GET";
+    const body = { ...callsiteMock };
+    for (const key of ["url", "uri", "path", "api", "apiUrl", "method", "type", "meth", "headers", "header", "params", "query"]) delete body[key];
+    const dataBody = callsiteMock.data && isPlainObject(callsiteMock.data) ? callsiteMock.data : body;
+    apiMatches.push({
+      method: String(method).toUpperCase(),
+      url: joinBaseUrl(wrapper.baseUrl, url),
+      index: wrapper.start,
+      extractor: "request-wrapper-webpack-callsite",
+      confidence: wrapper.baseUrl ? 0.86 : 0.82,
+      metadata: {
+        wrapperFunction: wrapper.name,
+        wrapperParam: wrapper.param,
+        inferredBaseUrl: wrapper.baseUrl,
+        query: mergeMockObjects(callsiteMock.params || {}, callsiteMock.query || {}),
+        body: dataBody,
+        bodyKeys: Object.keys(dataBody),
+        bodyInferenceSources: webpackDataFlow?.sources?.get(webpackParamMockKey(fn?.scopeId, fn?.name, paramIndex)) || []
       }
     });
   }
@@ -2467,7 +2558,7 @@ function dedupeBy(items, keyFn) {
 function collectApiMatches(target, text, regex, defaultMethod, urlGroup, extractor, methodGroup = null, stringConstants = {}) {
   for (const match of findAll(regex, text)) {
     const url = resolveUrlExpression(match[urlGroup], stringConstants);
-    if (!url) continue;
+    if (!url || !looksLikeApiUrl(url)) continue;
     const method = methodGroup ? match[methodGroup] : defaultMethod;
     target.push({
       method: String(method || "GET").toUpperCase(),
@@ -2513,6 +2604,180 @@ function extractClientBaseUrls(text, constants) {
   return clients;
 }
 
+function collectRequestWrapperFunctions(text, functionRanges, constants) {
+  const wrappers = [];
+  for (const fn of functionRanges || []) {
+    if (!fn.name || !fn.params?.length) continue;
+    const body = text.slice(fn.bodyStart, fn.end);
+    if (!/\b(?:wx|uni|Taro)\.request\s*\(|\bfetch\s*\(|\b(?:axios|request|http|ajax|service|client)\s*\(/.test(body)) continue;
+    const objectParam = fn.params.find((name) => new RegExp(`\\b${escapeRegex(name)}\\s*\\.\\s*(?:url|uri|path|api|apiUrl|method|type|meth|data|params|header|headers)\\b`).test(body));
+    if (objectParam && new RegExp(`\\b${escapeRegex(objectParam)}\\s*\\.\\s*(?:url|uri|path|api|apiUrl)\\b`).test(body)) {
+      const baseUrl =
+        inferWrapperBaseUrl(body, objectParam, constants, "object") ||
+        inferWrapperBaseUrl(text.slice(Math.max(0, fn.scopeStart), Math.min(text.length, fn.scopeEnd)), objectParam, constants, "object");
+      const defaultMethod = inferWrapperDefaultMethod(body, objectParam) || inferMethodFromWrapperName(fn.name);
+      wrappers.push({
+        name: fn.name,
+        param: objectParam,
+        paramIndex: fn.params.indexOf(objectParam),
+        mode: "object",
+        scopeId: fn.scopeId || "",
+        start: fn.start,
+        end: fn.end,
+        baseUrl,
+        defaultMethod,
+        confidence: baseUrl ? 0.88 : 0.82
+      });
+      continue;
+    }
+
+    const urlParamInfo = inferWrapperUrlParam(body, fn.params);
+    if (!urlParamInfo) continue;
+    const methodParam = inferWrapperParamForProperty(body, fn.params, ["method", "type", "meth"], [urlParamInfo.param]);
+    const dataParam = inferWrapperParamForProperty(body, fn.params, ["data", "body", "payload"], [urlParamInfo.param, methodParam?.param].filter(Boolean));
+    const queryParam = inferWrapperParamForProperty(body, fn.params, ["params", "query"], [urlParamInfo.param, methodParam?.param, dataParam?.param].filter(Boolean));
+    const baseUrl =
+      inferWrapperBaseUrl(body, urlParamInfo.param, constants, "url-arg", urlParamInfo.expression) ||
+      inferWrapperBaseUrl(text.slice(Math.max(0, fn.scopeStart), Math.min(text.length, fn.scopeEnd)), urlParamInfo.param, constants, "url-arg", urlParamInfo.expression);
+    const defaultMethod = inferWrapperDefaultMethod(body, methodParam?.param || "") || inferMethodFromWrapperName(fn.name);
+    wrappers.push({
+      name: fn.name,
+      param: urlParamInfo.param,
+      paramIndex: fn.params.indexOf(urlParamInfo.param),
+      mode: "url-arg",
+      methodParam: methodParam?.param || "",
+      methodParamIndex: methodParam ? fn.params.indexOf(methodParam.param) : undefined,
+      dataParam: dataParam?.param || "",
+      dataParamIndex: dataParam ? fn.params.indexOf(dataParam.param) : undefined,
+      queryParam: queryParam?.param || "",
+      queryParamIndex: queryParam ? fn.params.indexOf(queryParam.param) : undefined,
+      scopeId: fn.scopeId || "",
+      start: fn.start,
+      end: fn.end,
+      baseUrl,
+      defaultMethod,
+      confidence: baseUrl ? 0.86 : 0.78
+    });
+  }
+  return dedupeBy(wrappers, (item) => `${item.name}:${item.mode}:${item.param}:${item.start}`);
+}
+
+function inferWrapperUrlParam(body, params) {
+  const urlExpression = extractObjectPropertyExpression(body, ["url", "uri", "path", "api", "apiUrl"]);
+  if (urlExpression) {
+    for (const param of params || []) {
+      if (expressionMentionsIdentifier(urlExpression, param)) {
+        return { param, expression: urlExpression };
+      }
+    }
+  }
+
+  for (const param of params || []) {
+    const directCallPattern = new RegExp(`\\b(?:fetch|axios|request|http|ajax|service|client)\\s*\\(\\s*${escapeRegex(param)}\\b|\\b(?:axios|request|http|ajax|service|client)\\s*\\.\\s*(?:get|post|put|patch|delete|head|options)\\s*\\(\\s*${escapeRegex(param)}\\b`);
+    if (directCallPattern.test(body)) return { param, expression: param };
+  }
+
+  return null;
+}
+
+function inferWrapperParamForProperty(body, params, keys, excluded = []) {
+  const expr = extractObjectPropertyExpression(body, keys);
+  if (!expr) return null;
+  const excludedSet = new Set(excluded);
+  for (const param of params || []) {
+    if (excludedSet.has(param)) continue;
+    if (expressionMentionsIdentifier(expr, param)) return { param, expression: expr };
+  }
+  return null;
+}
+
+function expressionMentionsIdentifier(expression, name) {
+  return new RegExp(`\\b${escapeRegex(name)}\\b`).test(String(expression || ""));
+}
+
+function inferWrapperBaseUrl(body, param, constants, mode = "object", urlExpression = "") {
+  const propertyPattern = mode === "url-arg"
+    ? `\\b${escapeRegex(param)}\\b`
+    : `\\b${escapeRegex(param)}\\s*\\.\\s*(?:url|uri|path|api|apiUrl)\\b`;
+  const haystack = urlExpression || body;
+  const patterns = [
+    new RegExp(`([^;\\n]{0,500})\\+\\s*${propertyPattern}`, "i"),
+    new RegExp(`${propertyPattern}\\s*\\+\\s*([^;\\n]{0,500})`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(haystack);
+    if (!match) continue;
+    const resolved = resolveUrlExpression(match[1], constants);
+    if (resolved && /^(?:https?:\/\/|\/\/|\$\{)/i.test(resolved)) return resolved;
+  }
+  return "";
+}
+
+function inferWrapperDefaultMethod(body, param) {
+  const methodProperty = param ? new RegExp(`\\b${escapeRegex(param)}\\s*\\.\\s*(?:method|type|meth)\\b`, "i") : null;
+  if (methodProperty && methodProperty.test(body)) return "";
+  const methodLiteral = /\bmethod\s*:\s*(?:[A-Za-z_$][\w$]*\s*(?:\|\||\?\?)\s*)?(['"`])([A-Z]+)\1/i.exec(body);
+  return methodLiteral?.[2]?.toUpperCase() || "";
+}
+
+function inferMethodFromWrapperName(name) {
+  const match = /(?:^|[_$.-])(get|post|put|patch|delete|head|options)(?:$|[A-Z_$.:-])/i.exec(String(name || ""));
+  return match ? match[1].toUpperCase() : "";
+}
+
+function resolveWrapperCallMethod(wrapper, call, constants) {
+  let method = wrapper.defaultMethod || inferMethodFromWrapperName(wrapper.name) || "GET";
+  if (Number.isInteger(wrapper.methodParamIndex)) {
+    const resolved = resolveUrlExpression(call.args[wrapper.methodParamIndex] || "", constants);
+    if (/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(resolved)) method = resolved;
+  }
+  return String(method || "GET").toUpperCase();
+}
+
+function inferRequestFromWrapperCallArgs(wrapper, call, method, text, index, functionRanges, dataFlow = null) {
+  const upperMethod = String(method || "GET").toUpperCase();
+  const query = {};
+  let body = {};
+  const inferenceSources = [];
+
+  if (Number.isInteger(wrapper.queryParamIndex)) {
+    const queryArg = call.args[wrapper.queryParamIndex] || "";
+    const queryMock = inferMockFromArgument(queryArg, text, index, functionRanges, dataFlow);
+    Object.assign(query, queryMock);
+    inferenceSources.push(...webpackParamInferenceSources(dataFlow, text, index, functionRanges, [queryArg]));
+  }
+
+  if (Number.isInteger(wrapper.dataParamIndex)) {
+    const dataArg = call.args[wrapper.dataParamIndex] || "";
+    const dataMock = inferMockFromArgument(dataArg, text, index, functionRanges, dataFlow);
+    if (["GET", "HEAD"].includes(upperMethod)) Object.assign(query, dataMock);
+    else body = mergeMockObjects(body, dataMock);
+    inferenceSources.push(...webpackParamInferenceSources(dataFlow, text, index, functionRanges, [dataArg]));
+  }
+
+  if (!Number.isInteger(wrapper.queryParamIndex) && !Number.isInteger(wrapper.dataParamIndex)) {
+    const fallbackArg = call.args.find((arg, argIndex) =>
+      argIndex !== wrapper.paramIndex &&
+      argIndex !== wrapper.methodParamIndex &&
+      arg.trim().startsWith("{")
+    );
+    if (fallbackArg) {
+      const fallbackMock = inferMockFromArgument(fallbackArg, text, index, functionRanges, dataFlow);
+      if (["GET", "HEAD"].includes(upperMethod)) Object.assign(query, fallbackMock);
+      else body = mergeMockObjects(body, fallbackMock);
+      inferenceSources.push(...webpackParamInferenceSources(dataFlow, text, index, functionRanges, [fallbackArg]));
+    }
+  }
+
+  return {
+    query,
+    body,
+    queryKeys: Object.keys(query),
+    bodyKeys: Object.keys(body),
+    bodyInferenceSources: inferenceSources
+  };
+}
+
 function resolveUrlExpression(expression, constants) {
   const expr = String(expression || "").trim();
   if (!expr) return "";
@@ -2522,6 +2787,7 @@ function resolveUrlExpression(expression, constants) {
 
   const bare = /^([A-Za-z_$][\w$]*)$/.exec(expr);
   if (bare && constants[bare[1]]) return constants[bare[1]];
+  if (bare) return "";
 
   const varPlusLiteral = /^([A-Za-z_$][\w$]*)\s*\+\s*(['"`])([^'"`]{0,800})\2$/.exec(expr);
   if (varPlusLiteral) return `${constants[varPlusLiteral[1]] || `\${${varPlusLiteral[1]}}`}${varPlusLiteral[3]}`;
@@ -2531,17 +2797,41 @@ function resolveUrlExpression(expression, constants) {
 
   const multiPart = expr.split("+").map((part) => part.trim()).filter(Boolean);
   if (multiPart.length > 1 && multiPart.length <= 8) {
+    let hasUnresolvedPart = false;
+    let hasConcretePathPart = false;
     const resolved = multiPart.map((part) => {
       const partLiteral = /^(['"`])([\s\S]{0,800})\1$/.exec(part);
-      if (partLiteral) return resolveTemplateLiteral(partLiteral[2], constants);
+      if (partLiteral) {
+        const value = resolveTemplateLiteral(partLiteral[2], constants);
+        if (hasConcreteApiPath(value)) hasConcretePathPart = true;
+        return value;
+      }
       const partBare = /^([A-Za-z_$][\w$]*)$/.exec(part);
-      if (partBare) return constants[partBare[1]] || `\${${partBare[1]}}`;
+      if (partBare) {
+        if (constants[partBare[1]]) {
+          const value = constants[partBare[1]];
+          if (hasConcreteApiPath(value)) hasConcretePathPart = true;
+          return value;
+        }
+        hasUnresolvedPart = true;
+        return `\${${partBare[1]}}`;
+      }
+      const memberExpr = /^([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)+)$/.exec(part);
+      if (memberExpr) {
+        hasUnresolvedPart = true;
+        return `\${${memberExpr[1].replace(/\s+/g, "")}}`;
+      }
+      hasUnresolvedPart = true;
       return "";
     }).join("");
+    if (hasUnresolvedPart && !hasConcretePathPart) return "";
     if (resolved) return resolved;
   }
 
-  return resolveTemplateLiteral(expr, constants);
+  if (/^(?:https?:\/\/|wss?:\/\/|ws:\/\/|\/\/|\/|\$\{)/i.test(expr) || /^`/.test(expr) || /['"]/.test(expr)) {
+    return resolveTemplateLiteral(expr, constants);
+  }
+  return "";
 }
 
 function resolveTemplateLiteral(value, constants) {
@@ -2552,6 +2842,17 @@ function looksLikeApiUrl(value) {
   return /^(?:https?:\/\/|wss?:\/\/|ws:\/\/|\/\/|\/|\$\{)/i.test(value) || /\/[A-Za-z0-9_-]+/.test(value);
 }
 
+function hasConcreteApiPath(value) {
+  const text = String(value || "");
+  if (/^\/(?!\/)[A-Za-z0-9_.~-]/.test(text)) return true;
+  try {
+    const parsed = new URL(text);
+    return Boolean(parsed.pathname && parsed.pathname !== "/");
+  } catch {
+    return /\/(?:api|webapi|gateway|service|v\d+|pages?|rest|graphql)\b/i.test(text);
+  }
+}
+
 function joinBaseUrl(base, url) {
   if (!base || /^(?:https?:)?\/\//i.test(url)) return url;
   if (!url.startsWith("/")) return url;
@@ -2560,10 +2861,9 @@ function joinBaseUrl(base, url) {
 
 function extractObjectUrl(block, constants, keys) {
   for (const key of keys) {
-    const re = new RegExp(`(?:^|[,{\\s])${escapeRegex(key)}\\s*:\\s*([^,\\n\\r}]{1,900})`, "i");
-    const match = re.exec(block);
-    if (!match) continue;
-    const resolved = resolveUrlExpression(match[1], constants);
+    const expr = extractObjectPropertyExpression(block, [key]);
+    if (!expr) continue;
+    const resolved = resolveUrlExpression(expr, constants);
     if (resolved) return resolved;
   }
   return "";
@@ -2571,8 +2871,9 @@ function extractObjectUrl(block, constants, keys) {
 
 function extractObjectString(block, keys) {
   for (const key of keys) {
-    const re = new RegExp(`(?:^|[,{\\s])${escapeRegex(key)}\\s*:\\s*(['"\`])([^'"\`]{1,800})\\1`, "i");
-    const match = re.exec(block);
+    const expr = extractObjectPropertyExpression(block, [key]);
+    if (!expr) continue;
+    const match = /^(['"`])([^'"`]{1,800})\1$/.exec(expr.trim());
     if (match) return match[2];
   }
   return "";
@@ -2676,6 +2977,25 @@ function collectNamedFunctionRanges(text) {
     ranges.push({
       name: match[1],
       params: splitParamNames(match[2] || match[3] || ""),
+      start: match.index,
+      bodyStart: open + 1,
+      end,
+      scopeStart: moduleScope?.bodyStart ?? 0,
+      scopeEnd: moduleScope?.end ?? text.length,
+      scopeKind: moduleScope ? "bundle-module" : "file",
+      scopeId: moduleScope?.id || ""
+    });
+  }
+
+  const expressionRe = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?function\s*\(([^)]*)\)\s*\{/g;
+  for (const match of findAll(expressionRe, text)) {
+    const open = match.index + match[0].length - 1;
+    const end = findMatchingBrace(text, open);
+    if (end === -1) continue;
+    const moduleScope = findEnclosingModule(moduleRanges, match.index);
+    ranges.push({
+      name: match[1],
+      params: splitParamNames(match[2] || ""),
       start: match.index,
       bodyStart: open + 1,
       end,
@@ -3410,10 +3730,12 @@ function inferContentType(snippet) {
 }
 
 function extractConfigsAccounts(shard, file, text, options) {
-  const configRe = /\b([A-Za-z_$][\w$]*(?:URL|Url|uri|URI|Host|HOST|Domain|DOMAIN|appid|appId|AppId|secret|Secret|appSecret|accessKey|accessKeyId|secretKey|token|Token|password|Password|passwd|username|userName|account|tenantId|orgId|bucket|region|dsn|ak|sk))\b\s*[:=]\s*(['"`])([^'"`]{1,1000})\2/g;
+  const configRe = /(?:^|[,{;\s])(['"]?)([A-Za-z_$][\w$.-]{0,120})\1\s*[:=]\s*(['"`])([^'"`]{1,2000})\3/g;
   for (const match of findAll(configRe, text)) {
-    const key = match[1];
-    const rawValue = match[3];
+    const key = match[2];
+    const rawValue = match[4];
+    if (!isSensitiveConfigKey(key) && !looksLikeSecretValue(rawValue)) continue;
+    if (!shouldRecordConfigLiteral(key, rawValue)) continue;
     const category = categorizeConfigKey(key, rawValue);
     const item = entity("config", key, {
       category,
@@ -3425,18 +3747,20 @@ function extractConfigsAccounts(shard, file, text, options) {
     addEvidence(shard, item, evidence(file, text, match.index, "config-literal-regex", 0.9));
     shard.configs.push(item);
 
-    if (/user|account|phone|email|password|passwd/i.test(key)) {
+    if (ACCOUNT_KEY_RE.test(key) && shouldRecordCredentialLiteral(key, rawValue)) {
       const account = entity("account", key, {
         category,
         value: maybeRedact(rawValue, `${key}:${category}`, options),
         files: [file],
-        confidence: 0.85,
+        confidence: /password|passwd|pwd|passphrase|passcode/i.test(key) ? 0.9 : 0.86,
         metadata: { key, sourceConfigId: item.id }
       });
       addEvidence(shard, account, evidence(file, text, match.index, "account-literal-regex", 0.85));
       shard.accounts.push(account);
     }
   }
+
+  extractValuePatternSecrets(shard, file, text, options);
 
   const storageRe = /\b(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)\s*\(\s*(['"`])([^'"`]{1,200})\1|\b(?:wx|uni)\.(?:getStorageSync|setStorageSync|removeStorageSync)\s*\(\s*(['"`])([^'"`]{1,200})\3/g;
   for (const match of findAll(storageRe, text)) {
@@ -3454,13 +3778,115 @@ function extractConfigsAccounts(shard, file, text, options) {
   }
 }
 
+function extractValuePatternSecrets(shard, file, text, options) {
+  const patterns = [
+    { name: "private_key", category: "private_key", re: /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]{20,4000}?-----END (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/g, confidence: 0.98 },
+    { name: "authorization_header", category: "token", re: /\bAuthorization\b\s*[:=]\s*(['"`])\s*(?:Bearer|Basic)\s+([A-Za-z0-9._~+/=-]{12,2000})\1/gi, group: 2, confidence: 0.88 },
+    { name: "jwt", category: "token", re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, confidence: 0.9 },
+    { name: "aws_access_key_id", category: "cloud_secret", re: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, confidence: 0.9 },
+    { name: "tencent_secret_id", category: "cloud_secret", re: /\bAKID[A-Za-z0-9]{13,40}\b/g, confidence: 0.88 },
+    { name: "github_token", category: "devops_token", re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{30,255}\b|\bgithub_pat_[A-Za-z0-9_]{20,255}\b/g, confidence: 0.94 },
+    { name: "gitlab_token", category: "devops_token", re: /\bglpat-[A-Za-z0-9_-]{20,}\b/g, confidence: 0.92 },
+    { name: "npm_token", category: "devops_token", re: /\bnpm_[A-Za-z0-9]{36,}\b/g, confidence: 0.92 },
+    { name: "pypi_token", category: "devops_token", re: /\bpypi-[A-Za-z0-9_-]{20,}\b/g, confidence: 0.9 },
+    { name: "slack_token", category: "devops_token", re: /\bxox[abprs]-[A-Za-z0-9-]{20,}\b/g, confidence: 0.9 },
+    { name: "stripe_secret_key", category: "payment_secret", re: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g, confidence: 0.9 },
+    { name: "openai_api_key", category: "ai_service_token", re: /\b(?:sk-(?!live_|test_)[A-Za-z0-9_-]{24,}|sess-[A-Za-z0-9_-]{24,})\b/g, confidence: 0.84 },
+    { name: "credential_url", category: "credential_url", re: /\b(?:https?|wss?|ftp|mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis):\/\/[^/\s"'`:@]{1,120}:[^@\s"'`]{3,300}@[^\s"'`<>)\\]+/gi, confidence: 0.92 }
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of findAll(pattern.re, text)) {
+      const rawValue = match[pattern.group || 0];
+      if (!rawValue || !shouldRecordCredentialLiteral(pattern.name, rawValue)) continue;
+      const item = entity("config", pattern.name, {
+        category: pattern.category,
+        value: maybeRedact(rawValue, pattern.category, options),
+        files: [file],
+        confidence: pattern.confidence,
+        metadata: { key: pattern.name, rawKind: "secret-value-pattern" }
+      });
+      addEvidence(shard, item, evidence(file, text, match.index, "secret-value-pattern", pattern.confidence));
+      shard.configs.push(item);
+    }
+  }
+}
+
+function looksLikeSecretValue(value) {
+  const v = String(value || "").trim();
+  if (!v) return false;
+  return /-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i.test(v) ||
+    /^(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,}$/i.test(v) ||
+    /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/.test(v) ||
+    /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/.test(v) ||
+    /\bAKID[A-Za-z0-9]{13,40}\b/.test(v) ||
+    /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{30,255}\b|\bgithub_pat_[A-Za-z0-9_]{20,255}\b/.test(v) ||
+    /\bglpat-[A-Za-z0-9_-]{20,}\b/.test(v) ||
+    /\bnpm_[A-Za-z0-9]{36,}\b/.test(v) ||
+    /\bpypi-[A-Za-z0-9_-]{20,}\b/.test(v) ||
+    /\bxox[abprs]-[A-Za-z0-9-]{20,}\b/.test(v) ||
+    /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/.test(v) ||
+    /\b(?:sk-(?!live_|test_)[A-Za-z0-9_-]{24,}|sess-[A-Za-z0-9_-]{24,})\b/.test(v) ||
+    looksLikeCredentialUrl(v);
+}
+
+function looksLikeCredentialUrl(value) {
+  return /\b(?:https?|wss?|ftp|mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis):\/\/[^/\s"'`:@]{1,120}:[^@\s"'`]{3,300}@/i.test(String(value || ""));
+}
+
+function isSensitiveConfigKey(key) {
+  const k = String(key || "");
+  if (/author|authority|authorized|authentic/i.test(k) && !/(authorization|oauth|bearer|basic|auth[_-]?(?:token|key|secret|code|id))/i.test(k)) return false;
+  if (/(?:encrypt|decrypt|cipher|crypto|hmac|aes|des|rsa|ec|sm2|sm4)[_-]?key|sign[_-]?key|salt|private[_-]?key/i.test(k)) return true;
+  return SENSITIVE_KEY_RE.test(k);
+}
+
+function shouldRecordConfigLiteral(key, value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return false;
+  const keyText = String(key || "");
+  if (/^(?:true|false|null|undefined)$/i.test(rawValue)) return false;
+  if (CREDENTIAL_VALUE_KEY_RE.test(keyText) || looksLikeSecretValue(rawValue)) {
+    return shouldRecordCredentialLiteral(keyText, rawValue);
+  }
+  return true;
+}
+
+function shouldRecordCredentialLiteral(key, value) {
+  const k = String(key || "").toLowerCase();
+  const v = String(value || "").trim();
+  if (!v) return false;
+  if (/^(?:password|passwd|pwd|passphrase|passcode|account|username|user|phone|mobile|email|token|secret|ak|sk|key|null|undefined|true|false)$/i.test(v)) return false;
+  if (/placeholder|required|invalid|error|success|example|sample|mock|dummy|todo|change[_-]?me|your[_-]|replace[_-]?me/i.test(v) && !looksLikeSecretValue(v)) return false;
+  if (/请输入|请填写|不能为空|错误|失败|成功|占位|示例|样例|placeholder|required|invalid|error|success/i.test(v)) return false;
+  if (/password|passwd|pwd/.test(k) && /密码|口令|password|passwd|pwd/i.test(v) && v.length < 16) return false;
+  if (/account|username|user/.test(k) && /账号|账户|用户名|用户|account|username/i.test(v) && v.length < 16) return false;
+  if (/password|passwd|pwd|passphrase|passcode/.test(k) && /密码|口令|password|passwd|pwd|passphrase|passcode/i.test(v) && v.length < 16) return false;
+  if (v.length < 6 && CREDENTIAL_VALUE_KEY_RE.test(k)) return false;
+  if (/phone|mobile/.test(k) && !/(?:\+?86[- ]?)?1[3-9]\d{9}/.test(v)) return false;
+  if (/email/.test(k) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return false;
+  return true;
+}
+
 function categorizeConfigKey(key, value) {
   const k = String(key).toLowerCase();
   const v = String(value).toLowerCase();
-  if (/password|passwd|pwd/.test(k)) return "password";
-  if (/username|account|user/.test(k)) return "account";
-  if (/token|jwt|session/.test(k)) return "token";
-  if (/secret|ak|sk|accesskey|key/.test(k)) return "secret";
+  if (/-----begin .*private key-----/i.test(value)) return "private_key";
+  if (looksLikeCredentialUrl(value)) return "credential_url";
+  if (/password|passwd|pwd|passphrase|passcode/.test(k)) return "password";
+  if (/username|account|user[_-]?name|login[_-]?name/.test(k)) return "account";
+  if (/phone|mobile/.test(k)) return "phone";
+  if (/email/.test(k)) return "email";
+  if (/jwt|id[_-]?token|access[_-]?token|refresh[_-]?token|bearer|authorization|auth[_-]?token|security[_-]?token|session|cookie/.test(k)) return "token";
+  if (/webhook/.test(k) || /hooks\.slack|oapi\.dingtalk|open\.feishu|qyapi\.weixin/i.test(v)) return "webhook";
+  if (/connection[_-]?string|connstr|jdbc|mongo(?:db)?[_-]?uri|redis[_-]?url|database[_-]?url|db[_-]?/.test(k) || /^(?:jdbc:|mongodb(?:\+srv)?:|postgres(?:ql)?:|mysql:|redis:)/i.test(v)) return "database_credential";
+  if (/smtp|mail[_-]?password/.test(k)) return "smtp_credential";
+  if (/mch[_-]?key|pay[_-]?key|api[_-]?v3[_-]?key|merchant[_-]?key|alipay[_-]?private[_-]?key|wechat[_-]?pay/.test(k)) return "payment_secret";
+  if (/openai|anthropic|gemini|cohere|huggingface|hf[_-]?token|pinecone|langchain|perplexity|replicate/.test(k)) return "ai_service_token";
+  if (/github|gitlab|npm|sonar|docker|registry|pypi|rubygems|postman|pulumi/.test(k)) return "devops_token";
+  if (/aws|aliyun|alibaba|tencent|secretid|secretkey|access[_-]?key|accesskey|ak|sk|azure|gcp|google/.test(k)) return "cloud_secret";
+  if (/(?:encrypt|decrypt|cipher|crypto|hmac|aes|des|rsa|ec|sm2|sm4)[_-]?key|sign[_-]?key|salt|private[_-]?key/.test(k)) return "crypto_secret";
+  if (/private[_-]?key|secret|api[_-]?key|apikey|x[_-]?api[_-]?key|client[_-]?secret|app[_-]?secret|signing[_-]?key|signature|secret[_-]?key|key/.test(k)) return "secret";
   if (/appid|app_id/.test(k)) return "appid";
   if (/bucket|region/.test(k)) return "storage";
   if (/dsn|sentry|bugly/.test(k) || /sentry|bugly/.test(v)) return "monitoring";
@@ -4775,7 +5201,7 @@ function renderChineseSecurityMarkdown(analysis) {
     (item.files || []).slice(0, 4).join(", "),
     pct(item.confidence)
   ]);
-  const sensitiveConfigs = (analysis.configs || []).filter((item) => /secret|token|password|passwd|pwd|ak|sk|key|appid|account|authorization|cookie|session|passTicket|pass_ticket/i.test(`${item.name} ${item.category}`)).slice(0, 120);
+  const sensitiveConfigs = (analysis.configs || []).filter((item) => isSensitiveConfigKey(`${item.name} ${item.category}`) || looksLikeSecretValue(item.value)).slice(0, 120);
   const sourceMaps = analysis.sourceMapDiscovery || {};
   const chunks = analysis.chunkDiscovery || {};
   const supplements = analysis.supplementDiscovery || {};
@@ -5314,7 +5740,7 @@ function renderSecurityMarkdown(analysis) {
     (item.files || []).slice(0, 3).join(", "),
     pct(item.confidence)
   ]);
-  const sensitiveConfigs = (analysis.configs || []).filter((item) => /secret|token|password|passwd|pwd|ak|sk|key|appid|account|authorization|cookie|session|passTicket|pass_ticket/i.test(`${item.name} ${item.category}`)).slice(0, 80);
+  const sensitiveConfigs = (analysis.configs || []).filter((item) => isSensitiveConfigKey(`${item.name} ${item.category}`) || looksLikeSecretValue(item.value)).slice(0, 80);
   const sourceMaps = analysis.sourceMapDiscovery || {};
   const chunks = analysis.chunkDiscovery || {};
   const supplements = analysis.supplementDiscovery || {};

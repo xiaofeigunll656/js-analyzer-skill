@@ -13,7 +13,9 @@
     "discover-sourcemaps": "node scripts/js-analyzer.mjs discover-sourcemaps",
     "download-sourcemaps": "node scripts/js-analyzer.mjs download-sourcemaps",
     "validate": "node scripts/validate-outputs.mjs",
-    "test": "node tests/run-fixtures.mjs"
+    "test": "node scripts/run-fixtures.mjs",
+    "safety:check": "node scripts/check-public-safety.mjs --staged",
+    "safety:check:worktree": "node scripts/check-public-safety.mjs"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^12.0.0",
