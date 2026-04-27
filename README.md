@@ -1,5 +1,7 @@
 # js-analyzer-skill
 
+Language: [English](README.md) | [中文](README.zh-CN.md)
+
 `js-analyzer-skill` is a Codex skill for analyzing authorized JavaScript projects and producing a structured engineering/security-audit report. It is designed for source projects, WeChat Mini Programs, unpacked Mini Programs, webpack/browserify bundles, minified JavaScript, and mixed frontend artifacts.
 
 The skill helps Codex recover project structure, business modules, API request construction, configuration, external assets, crypto/signature logic, and evidence-backed findings. It also generates Markdown, Postman, OpenAPI, and a local Swagger-style UI workspace from the same `analysis.json` source of truth.
