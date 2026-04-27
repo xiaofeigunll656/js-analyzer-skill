@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/js-analyzer-skill/analysis-state.schema.json",
+  "title": "JS Analyzer Resumable Plan",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "targetPath", "outputPath", "createdAt", "updatedAt", "tasks"],
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "runId": { "type": "string" },
+    "targetPath": { "type": "string" },
+    "outputPath": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "options": { "type": "object" },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "status", "progress"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "scope": { "type": "object" },
+          "dependsOn": { "type": "array", "items": { "type": "string" } },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "blocked", "failed", "skipped"]
+          },
+          "progress": { "type": "number", "minimum": 0, "maximum": 100 },
+          "inputFiles": { "type": "array", "items": { "type": "string" } },
+          "outputFiles": { "type": "array", "items": { "type": "string" } },
+          "startedAt": { "type": "string" },
+          "endedAt": { "type": "string" },
+          "error": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

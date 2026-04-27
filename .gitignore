@@ -1,0 +1,15 @@
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+
+# Local analysis output may contain recovered secrets, default accounts, tokens,
+# internal URLs, source-map paths, and other sensitive project facts.
+analysis-output/
+reports/
+evidence/
+*.analysis-output/
+tests/
+tests/output/

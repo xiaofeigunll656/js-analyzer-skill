@@ -1,0 +1,42 @@
+{
+  "name": "js-analyzer-skill",
+  "version": "0.1.0",
+  "description": "Codex skill and CLI helpers for resumable JavaScript project analysis with Markdown, Postman, and Swagger-style outputs.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "analyze": "node scripts/js-analyzer.mjs analyze",
+    "resume": "node scripts/js-analyzer.mjs resume",
+    "status": "node scripts/js-analyzer.mjs status",
+    "discover-chunks": "node scripts/js-analyzer.mjs discover-chunks",
+    "download-chunks": "node scripts/js-analyzer.mjs download-chunks",
+    "discover-sourcemaps": "node scripts/js-analyzer.mjs discover-sourcemaps",
+    "download-sourcemaps": "node scripts/js-analyzer.mjs download-sourcemaps",
+    "validate": "node scripts/validate-outputs.mjs",
+    "test": "node tests/run-fixtures.mjs"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^12.0.0",
+    "@babel/generator": "^7.28.5",
+    "@babel/parser": "^7.28.5",
+    "@babel/traverse": "^7.28.5",
+    "commander": "^14.0.2",
+    "fast-glob": "^3.3.3",
+    "js-beautify": "^1.15.4",
+    "postman-collection": "^4.5.0",
+    "source-map": "^0.7.6",
+    "swagger-ui-dist": "^5.30.2",
+    "yaml": "^2.8.1"
+  },
+  "optionalDependencies": {
+    "crypto-js": "^4.2.0",
+    "sm-crypto": "^0.3.13",
+    "webcrack": "^2.15.0"
+  },
+  "scarfSettings": {
+    "enabled": false
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}
