@@ -37,3 +37,13 @@ apiPost("/api/order/list", {
   pageNo: 1,
   pageSize: 20
 });
+
+const aliasedWx = wx;
+aliasedWx.request({
+  url: BASE_URL + "/api/coupon/list",
+  method: "POST",
+  data: {
+    memberId: "u001",
+    status: "unused"
+  }
+});

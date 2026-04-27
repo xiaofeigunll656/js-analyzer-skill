@@ -6,36 +6,58 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const fixtureRoot = path.join(repoRoot, "assets", "synthetic-fixtures", "mini-program-wrapper");
-const outputRoot = path.join(repoRoot, "analysis-output", "synthetic-mini-program-wrapper");
+await runFixture({
+  name: "mini-program-wrapper",
+  expectedPaths: ["/api/coupon/list", "/api/member/profile", "/api/order/list"],
+  assertions: (byPath) => {
+    assert.equal(byPath.get("/api/member/profile").method, "GET");
+    assert.deepEqual(byPath.get("/api/member/profile").query, { memberId: "u001" });
 
-await fs.rm(outputRoot, { recursive: true, force: true });
-await run(process.execPath, [
-  path.join(repoRoot, "scripts", "js-analyzer.mjs"),
-  "analyze",
-  fixtureRoot,
-  "--out",
-  outputRoot,
-  "--max-files-per-task",
-  "20",
-  "--max-bytes-per-task",
-  "200000"
-]);
+    assert.equal(byPath.get("/api/order/list").method, "POST");
+    assert.deepEqual(byPath.get("/api/order/list").body, { pageNo: 1, pageSize: 20 });
 
-const analysis = JSON.parse(await fs.readFile(path.join(outputRoot, "analysis.json"), "utf8"));
-const byPath = new Map((analysis.apis || []).map((api) => [api.path, api]));
-const paths = [...byPath.keys()].sort();
+    assert.equal(byPath.get("/api/coupon/list").method, "POST");
+    assert.deepEqual(byPath.get("/api/coupon/list").body, { memberId: "u001", status: "unused" });
+  }
+});
 
-assert.ok(byPath.has("/api/member/profile"), "object-style request wrapper callsite should be extracted");
-assert.equal(byPath.get("/api/member/profile").method, "GET");
-assert.deepEqual(byPath.get("/api/member/profile").query, { memberId: "u001" });
+await runFixture({
+  name: "api-literal-fallback",
+  expectedPaths: ["/api/wallet/balance", "/webapi/coupon/detail"],
+  assertions: (byPath) => {
+    assert.equal(byPath.get("/api/wallet/balance").metadata.extractor, "api-path-literal-fallback");
+    assert.equal(byPath.get("/webapi/coupon/detail").metadata.extractor, "api-path-literal-fallback");
+  }
+});
 
-assert.ok(byPath.has("/api/order/list"), "url-argument request wrapper callsite should be extracted");
-assert.equal(byPath.get("/api/order/list").method, "POST");
-assert.deepEqual(byPath.get("/api/order/list").body, { pageNo: 1, pageSize: 20 });
-assert.deepEqual(paths, ["/api/member/profile", "/api/order/list"], "wrapper internals should not create base-only phantom APIs");
+async function runFixture({ name, expectedPaths, assertions }) {
+  const fixtureRoot = path.join(repoRoot, "assets", "synthetic-fixtures", name);
+  const outputRoot = path.join(repoRoot, "analysis-output", `synthetic-${name}`);
 
-console.log(`Fixture tests passed: ${(analysis.apis || []).length} API candidates extracted.`);
+  await fs.rm(outputRoot, { recursive: true, force: true });
+  await run(process.execPath, [
+    path.join(repoRoot, "scripts", "js-analyzer.mjs"),
+    "analyze",
+    fixtureRoot,
+    "--out",
+    outputRoot,
+    "--max-files-per-task",
+    "20",
+    "--max-bytes-per-task",
+    "200000"
+  ]);
+
+  const analysis = JSON.parse(await fs.readFile(path.join(outputRoot, "analysis.json"), "utf8"));
+  const byPath = new Map((analysis.apis || []).map((api) => [api.path, api]));
+  const paths = [...byPath.keys()].sort();
+
+  for (const expectedPath of expectedPaths) {
+    assert.ok(byPath.has(expectedPath), `${name}: expected ${expectedPath} to be extracted`);
+  }
+  assert.deepEqual(paths, expectedPaths, `${name}: wrapper internals should not create phantom APIs`);
+  assertions(byPath);
+  console.log(`${name}: ${(analysis.apis || []).length} API candidates extracted.`);
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {

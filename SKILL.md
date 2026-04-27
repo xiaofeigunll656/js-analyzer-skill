@@ -47,6 +47,15 @@ node scripts/js-analyzer.mjs analyze ./xxx --out ./analysis-output/xxx
 
 Then read `./analysis-output/xxx/analysis-state/run-summary.md` before doing any manual follow-up.
 
+If a report shows no APIs after upgrading this skill, do not trust the old rendered report until extraction has been rebuilt. Re-run with a fresh output directory, or force the extraction stage to rebuild:
+
+```bash
+node scripts/js-analyzer.mjs analyze ./xxx --out ./analysis-output/xxx --force-rebuild-task extract.plan-batches
+node scripts/validate-outputs.mjs ./analysis-output/xxx
+```
+
+For Mini Program packages, first confirm the target is an unpacked/decompiled directory containing analyzable files such as `app-service.js`, page `.js` files, or downloaded H5/static JS. If APIs are still empty, inspect `analysis-state/run-summary.md`, run `discover-supplements`, then `resume`; many Mini Programs keep WebView/H5/plugin code outside the first unpacked bundle.
+
 If the project is a downloaded web frontend or webpack/Vite bundle, inspect missing lazy chunks:
 
 ```bash

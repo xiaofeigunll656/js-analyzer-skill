@@ -2265,6 +2265,39 @@ function extractApis(shard, file, text, options) {
     });
   }
 
+  const broadRequestCallRe = /\b((?:[A-Za-z_$][\w$]*\s*\.\s*)*[A-Za-z_$][\w$]*)\s*\.\s*request\s*\(/gi;
+  for (const match of findAll(broadRequestCallRe, text)) {
+    const objectChain = match[1].replace(/\s+/g, "");
+    const objectName = objectChain.split(".").pop();
+    if (["console", "Math", "JSON", "Promise"].includes(objectName)) continue;
+    const call = splitCallArguments(text, match.index + match[0].length - 1, 3200);
+    if (!call || call.args.length === 0) continue;
+    const objectArg = call.args.find((arg) => arg.trim().startsWith("{"));
+    if (!objectArg) continue;
+    const url = extractObjectUrl(objectArg, stringConstants, ["url", "uri", "path", "api", "apiUrl"]);
+    if (!url || !looksLikeApiUrl(url)) continue;
+    const method = extractObjectString(objectArg, ["method", "type", "meth"]) || "GET";
+    const base = clientBaseUrls[objectName] || "";
+    const requestInference = inferRequestFromObjectBlock(objectArg, method, text, match.index, functionRanges, webpackDataFlow);
+    const responseInference = inferResponseFromSnippet(responseSnippetAfterCall(text, call.end));
+    apiMatches.push({
+      method: method.toUpperCase(),
+      url: joinBaseUrl(base, url),
+      index: match.index,
+      extractor: /^(?:wx|uni|Taro)$/.test(objectChain) ? "mini-program-request" : "broad-request-method-object",
+      confidence: /^(?:wx|uni|Taro)$/.test(objectChain) ? 0.9 : 0.78,
+      metadata: {
+        objectChain,
+        wrapperObject: objectName,
+        inferredBaseUrl: base,
+        rawExpression: objectArg.trim().slice(0, 1000),
+        ...requestInference,
+        ...responseInference,
+        headerKeys: extractObjectKeys(objectArg, ["header", "headers"])
+      }
+    });
+  }
+
   for (const wrapper of requestWrappers) {
     const callRe = new RegExp(`\\b${escapeRegex(wrapper.name)}\\s*\\(`, "g");
     for (const match of findAll(callRe, text)) {
@@ -2352,6 +2385,10 @@ function extractApis(shard, file, text, options) {
     });
   }
 
+  if (apiMatches.length === 0) {
+    collectApiPathLiteralFallback(apiMatches, text, stringConstants);
+  }
+
   for (const found of apiMatches) {
     const parsed = parseApiUrl(found.url);
     const metadataQuery = found.metadata?.query && typeof found.metadata.query === "object" ? found.metadata.query : {};
@@ -2395,6 +2432,58 @@ function extractApis(shard, file, text, options) {
     addEvidence(shard, api, ev);
     shard.apis.push(api);
   }
+}
+
+function collectApiPathLiteralFallback(target, text, constants) {
+  const seen = new Set();
+  const literalRe = /(['"`])([^'"`\r\n]{2,700})\1/g;
+  for (const match of findAll(literalRe, text)) {
+    const raw = resolveTemplateLiteral(match[2], constants).trim();
+    if (!looksLikeApiLiteralCandidate(raw)) continue;
+    const key = raw.replace(/[?#].*$/, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const method = inferMethodNearText(text, match.index);
+    target.push({
+      method,
+      url: raw,
+      index: match.index,
+      extractor: "api-path-literal-fallback",
+      confidence: 0.42,
+      metadata: {
+        rawExpression: match[0].slice(0, 1000),
+        requestConstruction: "Low-confidence fallback from an API-looking string literal. Confirm the caller/wrapper before treating this as a live endpoint.",
+        methodInferred: method === "GET" ? "fallback_default" : "nearby_literal"
+      }
+    });
+    if (seen.size >= 120) break;
+  }
+}
+
+function looksLikeApiLiteralCandidate(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.includes("${")) return false;
+  if (/\.(?:js|mjs|css|map|png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|json|wxml|wxss)(?:[?#]|$)/i.test(raw)) return false;
+  let pathValue = raw;
+  if (/^(?:https?:)?\/\//i.test(raw)) {
+    try {
+      const parsed = new URL(raw.startsWith("//") ? `https:${raw}` : raw);
+      pathValue = parsed.pathname || "/";
+    } catch {
+      return false;
+    }
+  }
+  return /^\/(?:api|webapi|gateway|gw|service|rest|graphql|cgi-bin|sns|wxa|v\d+)(?:\/|$|[?&#.-])/i.test(pathValue) ||
+    /\/(?:api|webapi|gateway|service|cgi-bin|sns|wxa|v\d+)\/[A-Za-z0-9_.~/-]{2,}/i.test(pathValue);
+}
+
+function inferMethodNearText(text, index) {
+  const window = text.slice(Math.max(0, index - 260), Math.min(text.length, index + 260));
+  const methodLiteral = /\b(?:method|type|meth)\s*:\s*(['"`])(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\1/i.exec(window);
+  if (methodLiteral) return methodLiteral[2].toUpperCase();
+  const wrapperName = /\b(?:api|http|request|ajax|service|client)?\s*(get|post|put|patch|delete|head|options)\s*\(/i.exec(window);
+  if (wrapperName) return wrapperName[1].toUpperCase();
+  return "GET";
 }
 
 function extractCallGraphHints(shard, file, text, options) {
