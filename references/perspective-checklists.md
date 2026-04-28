@@ -1,6 +1,6 @@
 # Perspective Checklists
 
-Use these checklists after the scripted extraction. They guide Codex's manual reasoning and help decide what is still missing from the report.
+Use these checklists during the AI-led review and again before final reporting. They guide Codex's manual reasoning and help decide what is still missing from the report. Scripted extraction, when used, is only one input.
 
 ## Intelligence Analyst
 

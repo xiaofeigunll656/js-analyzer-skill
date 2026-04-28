@@ -1,6 +1,6 @@
 # Website and Intelligence Analysis
 
-After scripted extraction, produce two extra summaries when useful.
+During the AI-led review or after any helper extraction, produce two extra summaries when useful.
 
 ## Website Analyst Summary
 

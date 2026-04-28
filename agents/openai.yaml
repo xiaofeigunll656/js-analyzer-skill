@@ -1,6 +1,6 @@
 interface:
   display_name: "JS Analyzer Skill"
-  short_description: "Resumable JS project analysis to Markdown, Postman, and Swagger-style UI."
-  default_prompt: "Use $js-analyzer-skill to analyze this authorized JavaScript project and generate resumable Markdown, Postman, and Swagger UI outputs."
+  short_description: "AI-led JS project analysis with evidence-backed reports and optional API artifacts."
+  default_prompt: "Use $js-analyzer-skill to inspect this authorized JavaScript project directly, trace request/response behavior, and write a useful evidence-backed report. Generate Postman, OpenAPI, or Swagger-style outputs only when helpful."
 policy:
   allow_implicit_invocation: true
