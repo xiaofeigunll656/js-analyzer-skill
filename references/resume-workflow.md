@@ -1,33 +1,22 @@
 # Resume Workflow
 
-## Principle
+This Codex-only skill does not rely on a script-managed task engine. Resume by reading the user's latest request, prior report, notes, and any `codex-js-leads.md/json` files.
 
-Every meaningful task writes durable state before the next task starts. A new chat should be able to read only `run-summary.md`, `plan.json`, and unfinished shards to continue.
+## Recommended Local State
 
-## State Files
+For long analyses, keep simple local artifacts under ignored output directories:
 
-- `analysis-state/plan.json`: task list and statuses.
-- `analysis-state/progress.jsonl`: append-only event stream.
-- `analysis-state/shards/*.json`: batch extraction results.
-- `analysis-state/checkpoints/*.json`: stage-level snapshots.
-- `analysis-state/run-summary.md`: compact resume briefing.
-
-## Task Rules
-
-- Use small tasks. Avoid one huge "analyze everything" step.
-- Mark a task `in_progress` before work starts.
-- Mark it `completed`, `failed`, or `blocked` immediately after it ends.
-- Append progress events for task start, completion, failure, and generated output.
-- Refresh `run-summary.md` after each task.
+- `project-report.md`: current human report draft.
+- `codex-js-leads.md/json`: optional helper lead index.
+- `notes.md`: optional manual checkpoint notes.
+- `evidence/` or `analysis-output/`: ignored local evidence folders.
 
 ## New Session Instructions
 
-1. Read `analysis-state/run-summary.md`.
-2. Read `analysis-state/plan.json`.
-3. Run `node scripts/js-analyzer.mjs status --out <output-dir>`.
-4. Run `node scripts/js-analyzer.mjs resume --out <output-dir>` when there are pending or failed tasks.
-5. If the previous run is already complete and the user asks to analyze the same project again, ask whether they want a fresh analysis. Use `node scripts/js-analyzer.mjs analyze <target> --out <output-dir> --fresh` only after they choose to rebuild, or `--resume-existing` only when they explicitly choose to keep the old report.
+1. Read the prior report or notes first.
+2. Read `codex-js-leads.md` only as a checklist.
+3. Re-open the source files behind important claims.
+4. Continue from the highest-risk gaps: request wrappers, sensitive configs, API parameters, response inference, source maps, chunks, and operations signals.
+5. Refresh the Markdown report from source evidence.
 
-## Rebuilds
-
-Use `--force-rebuild-task <task-id>` to reset and rerun a specific task. Do not delete all output unless the user explicitly asks.
+Do not restart a large analysis just because a previous helper output exists. Do not trust helper output without re-reading source.

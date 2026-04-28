@@ -1,136 +1,112 @@
 ---
 name: js-analyzer-skill
-description: AI-led analysis of authorized JavaScript, TypeScript, WeChat Mini Program, unpacked Mini Program, webpack/browserify bundle, minified, or obfuscated frontend projects. Use when Codex needs to inspect code directly and produce useful evidence-backed Markdown reports, API request/response reconstruction, request wrapper analysis, configs, accounts, external assets, developer/operations signals, crypto/signature logic, Postman collections, OpenAPI specs, local Swagger-style UI pages, or resumable long-running JS analysis workflows. Bundled scripts are optional helpers, not the primary analyst.
+description: Codex-only, AI-led analysis of authorized JavaScript, TypeScript, WeChat Mini Program, unpacked Mini Program, webpack/browserify bundle, minified, or obfuscated frontend projects. Use when Codex must decide how to inspect JS projects directly, trace request/response behavior, recover APIs, sensitive configs, accounts, source-map/chunk leads, crypto/signature logic, operations signals, and write useful evidence-backed Markdown reports. Includes only small Codex helper scripts for evidence lead collection and validation; no script is the analyst.
 ---
 
 # JS Analyzer Skill
 
-Analyze only projects the user is authorized to inspect. Treat findings as local engineering/security-audit artifacts: preserve discovered values by default, including tokens, default accounts, appids, ak/sk, URLs, and internal service addresses. Redact only when the user explicitly wants a shareable report.
+Analyze only projects the user is authorized to inspect. Codex is the analyst. The skill exists to improve Codex's own reading, tracing, judgment, and reporting, not to hand control to a scanner.
 
-## Operating Principle
+## Core Rule
 
-Codex is the analyst. Scripts are helpers.
+AI decides how to analyze the project.
 
-Do not turn the task into "run a script and paste whatever it produced." Read source files, trace request flow, compare evidence, infer carefully, and write a report a human engineer can actually use. Use bundled scripts only when they accelerate repeatable work such as indexing, lazy-chunk/source-map discovery, resumable state, validation, Postman/OpenAPI generation, or local Swagger-style UI output.
+Use normal Codex tools first: `rg`, file reads, source-map inspection, targeted code slices, and reasoning. If Codex can see or infer something directly, do not add or run a JS script for that job.
 
-Script output is never authoritative by itself. If a script misses APIs, returns an empty list, misclassifies a wrapper, or produces a thin report, inspect the code directly and correct the analysis with evidence.
+Use the bundled helper only as a small evidence indexer:
 
-## Default AI-Led Workflow
+```bash
+node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name>
+```
+
+This writes:
+
+- `codex-js-leads.json`: machine-readable leads with evidence.
+- `codex-js-leads.md`: a compact checklist for Codex to review.
+
+These files are not the report and not truth. They are a map of places Codex should inspect manually.
+
+## Analysis Workflow
 
 1. Resolve the target path from the user's prompt. For "analyze the xxx project under the current directory", inspect `./xxx`.
-2. Check for existing local analysis state only to avoid losing work:
-   - Read `<out>/analysis-state/run-summary.md`, `<out>/analysis-state/plan.json`, and any existing `<out>/project-report.md` when present.
-   - If an old completed report exists, do not silently reuse it as the answer. Either refresh it from source or ask the user before relying on it.
-3. Inventory the project with targeted file listing, not by loading the whole tree into context. Classify it as source JS/TS, WeChat Mini Program source, unpacked Mini Program, webpack/browserify bundle, minified/obfuscated bundle, or mixed.
-4. Read the high-leverage files first:
+2. Read prior local notes or reports when present, but refresh conclusions from source when the old report is thin, stale, script-heavy, or missing obvious findings.
+3. Classify the project from files and code evidence: source JS/TS, WeChat Mini Program source, unpacked Mini Program, webpack/browserify bundle, minified/obfuscated bundle, source-map recovered project, or mixed.
+4. Read high-leverage files first:
    - manifests: `package.json`, `app.json`, `project.config.json`, `ext.json`, router/build config
-   - request layer: API directories, request/http/service wrappers, interceptors, auth/token helpers
-   - entrypoints/pages/routes/components and source-map `sourcesContent` when available
-   - bundles/runtime chunks that define module loading, public paths, and wrapper aliases
-5. Build a working evidence notebook while reading. Keep each conclusion tied to file, line, snippet summary, confidence, and uncertainty.
-6. Trace request construction before listing APIs:
+   - request layer: API modules, request/http/service wrappers, interceptors, auth/token/storage helpers
+   - pages/routes/components/stores and source-map `sourcesContent`
+   - bundle runtime/chunks that define aliases, public paths, wrapper exports, and dynamic imports
+5. Trace request construction before listing APIs:
    - base URL/env selection
-   - wrapper/interceptor behavior
-   - headers, token/tenant/org IDs, cookies/storage keys
+   - method defaults
+   - headers, tokens, cookies, tenant/org/user IDs
    - nonce/timestamp/signature/encryption flow
-   - call sites and object literals that supply query/body data
-7. Reconstruct APIs as an engineer would:
-   - request package: method, full URL/base/path, query, headers, body, auth/signature steps, minimal request example
-   - response package: live HAR/traffic response when provided; otherwise infer from `res.data`, `success(res)`, `.then(...)`, destructuring, table/form fields, mock files, or docs in the project
-   - parameter table: name, location, required/optional guess, source, meaning, evidence
-   - confidence and caveats for every inferred field
-8. Review from multiple perspectives before writing the final report: project architect, senior developer, website/product analyst, intelligence analyst, normal user, and authorized pentest engineer when appropriate. Use `references/perspective-checklists.md`.
-9. Write the human report in Chinese by default. The report comes first; machine artifacts are optional unless the user asked for them.
-10. Validate the report by doing at least one miss-finding pass: search for likely unreported APIs, domains, storage keys, auth headers, crypto/signature terms, source maps, chunks, and operations endpoints. Add gaps to `uncertainties` instead of hiding them.
+   - call-site object literals and form/state/route/storage values that supply query/body data
+6. Reconstruct each important API as an engineer would:
+   - interface: method, base URL, path/raw URL, business module, confidence
+   - request package: headers, query, body, auth/signature steps, minimal request example
+   - response package: observed HAR/traffic if supplied; otherwise frontend-read fields, table/form bindings, stores, mock/type/docs clues, and cautious inferred example
+   - evidence: file, line, snippet summary, review method, confidence, uncertainty
+7. Search for non-API intelligence and security leads:
+   - appids, default/test accounts, hardcoded passwords, tokens, ak/sk, private keys, webhooks, DSNs, storage buckets, API docs, repos, CI/CD, Nacos/Apollo/Consul/Eureka, monitoring, payment/SMS/captcha/maps/push/analytics
+   - source-map local paths, developer names/emails/phones, build users, internal domains, gateway/service names
+8. Write the Markdown report in Chinese by default. The report must lead with conclusions, then evidence. It should be useful even when no helper script was run.
+9. Before finishing, do a miss-finding pass: search likely unreported APIs, sensitive keys, accounts, storage keys, auth headers, crypto/signature terms, source maps, chunks, and operations endpoints. Put weak leads in `不确定项/待复核`.
 
-## When To Use Scripts
+## Helper Script Boundary
 
-Use scripts deliberately, with Codex review before and after.
+`scripts/codex-js-leads.mjs` is intentionally small. It scans local text-like files and highlights leads that Codex should inspect:
 
-Good uses:
+- backend-looking paths and URLs
+- request primitives/wrappers
+- sensitive-looking key/value assignments
+- accounts, appids, tenant/org IDs
+- domains, API docs, repos, operations systems
+- crypto/signature terms
+- source-map and chunk hints
+- developer/build signals
 
-- `status` / `resume`: continue a long run that already has durable state.
-- `discover-chunks`, `discover-sourcemaps`, `discover-supplements`: find missing local/remote artifacts that direct reading suggests may exist.
-- `analyze`: create a broad first-pass index for a large bundle or generate machine artifacts, then manually audit the important findings.
-- `validate-outputs`: check generated `analysis.json`, Markdown, Postman, OpenAPI, and HTML outputs after they exist.
-- `render`: regenerate machine-readable outputs after Codex has corrected or enriched structured data.
+Use it when it saves time on a large or minified project. Skip it when direct reading is faster.
 
-Avoid:
+Do not use helper output to replace:
 
-- Running `analyze` as the first and only analysis step.
-- Re-running scripts repeatedly when the real problem is an untraced wrapper, missing source map, dynamic request body, or weak report writing.
-- Reporting "no APIs found" until Codex has searched URL literals, request wrappers, obfuscated wrapper call sites, routes, source maps, and nearby call-site objects.
+- project classification
+- wrapper/interceptor tracing
+- request/response reconstruction
+- business feature grouping
+- severity/risk judgment
+- final report writing
 
-Useful commands:
-
-```bash
-node scripts/js-analyzer.mjs status --out <output-dir>
-node scripts/js-analyzer.mjs analyze <target-project> --out <output-dir>
-node scripts/js-analyzer.mjs resume --out <output-dir>
-node scripts/js-analyzer.mjs discover-chunks --out <output-dir>
-node scripts/js-analyzer.mjs discover-sourcemaps --out <output-dir>
-node scripts/js-analyzer.mjs discover-supplements --out <output-dir>
-node scripts/validate-outputs.mjs <output-dir>
-```
-
-Remote downloads require explicit user approval:
+Validate helper output when needed:
 
 ```bash
-node scripts/js-analyzer.mjs download-chunks --out <output-dir> --base-url <origin>
-node scripts/js-analyzer.mjs download-sourcemaps --out <output-dir> --base-url <origin>
-node scripts/js-analyzer.mjs download-supplements --out <output-dir>
+node scripts/validate-outputs.mjs analysis-output/<project-name>
 ```
 
-Default scripts never execute target project code. Treat dynamic evaluation, deobfuscator execution, target build scripts, packet replay, or live API calls as separate explicit user-approved work.
+Remote downloads, target build scripts, dynamic evaluation, deobfuscator execution, packet replay, and live API calls are separate explicit user-approved work. The bundled helper never executes target project code.
 
 ## Report Contract
 
-The final `project-report.md` must be readable and useful even if no script was run.
+The final `project-report.md` must quickly answer:
 
-It must quickly answer:
+- 项目是什么：类型、框架/运行时、入口、页面/路由、模块、构建/部署线索。
+- 项目做什么：从页面、文案、路由、权限码、事件、接口和资源推断出的主要业务流程。
+- 有哪些接口：域名/网关、接口前缀、主要 wrapper、完整接口索引、每个接口证据。
+- 请求如何构造：base URL、method、headers、auth、token/tenant/org/user ID、body/query 来源、签名/加密流程。
+- 返回如何判断：真实响应包（如有）、前端读取字段、表格/表单绑定、success/error 处理、mock/type/docs 线索、静态推断限制。
+- 有哪些敏感和运维线索：账号、密码、token、appid、ak/sk、repo、Swagger/Knife4j/YApi/Apifox、Nacos/Apollo、CI/CD、监控、存储/CDN、第三方 SDK。
+- 还有什么不确定：动态 URL、缺失 chunk/source map/plugin、弱参数猜测、未确认响应 schema、下一步应读哪些文件。
 
-- What is this project? Type, framework/runtime, entrypoints, pages/routes, modules, build/deploy clues.
-- What does it do? Main user/business flows inferred from pages, UI text, routes, permissions, APIs, events, and assets.
-- What interfaces exist? Domains/gateways, API prefixes, wrapper behavior, complete endpoint index, and per-interface evidence.
-- How are requests built? Base URL, method, headers, auth, token/tenant/org IDs, body/query source, signature/crypto pipeline.
-- What can be inferred about responses? Real response packets if provided; otherwise frontend-read fields, table/form bindings, success/error handling, and cautious mock examples.
-- What sensitive or operational clues exist? Configs, accounts, appids, keys, repositories, Swagger/Knife4j/YApi/Apifox, Nacos/Apollo/Consul/Eureka, CI/CD, monitoring, storage/CDN, payment/SMS/captcha/maps/push/analytics.
-- What remains uncertain? Missing chunks/source maps/plugins, dynamic URLs, weak parameter guesses, unconfirmed response schemas, and next files to inspect.
-
-Each API detail should use the shape in `references/report-template.md`: interface summary, parameter source, parameter table, minimal request package, response package, possible response example, and evidence.
+Each API detail should follow `references/report-template.md`: interface summary, business meaning, parameter source, parameter table, minimal request package, response package, possible response example, evidence, and uncertainty.
 
 ## Evidence Rules
 
 - Do not invent APIs, parameters, accounts, secrets, crypto details, or response schemas.
-- Put weak but useful leads in `uncertainties`.
-- Prefer exact file and line references. If line numbers are not available in a bundle/source-map virtual file, preserve the containing file, module ID/source name, and snippet summary.
 - Keep raw values in local reports unless the user asks for redaction.
-- For traffic captures or request/response packets supplied by the user, correlate them with source evidence and clearly label them as observed traffic. Do not commit captures or generated reports.
-
-## Output Model
-
-The human Markdown report may be written directly from Codex's evidence-backed analysis.
-
-Use `analysis.json` when machine-readable outputs are needed. If generated, keep it aligned with the report and include:
-
-- project identity, detected type, framework, entrypoints, Mini Program metadata
-- inventory: source files, bundles, source maps, routes, chunks, configs, assets
-- modules, features, APIs, request/response examples, crypto/signature findings
-- configs, accounts, external assets, developer/operations signals, third-party services
-- chunk/source-map/supplement discovery and unresolved candidates
-- call graph leads, diagrams, evidence, uncertainties, and progress summary
-
-Postman, OpenAPI, Swagger-style HTML, Mermaid diagrams, and helper scripts should be generated only when useful for the user's goal.
-
-## High-Value Search Patterns
-
-Use targeted `rg` searches before broad reading:
-
-```bash
-rg -n "wx\\.request|uni\\.request|Taro\\.request|axios|fetch\\(|XMLHttpRequest|baseURL|baseUrl|Authorization|token|sign|signature|CryptoJS|createHmac|createHash|JSEncrypt|sm2|sm3|sm4" <target>
-rg -n "Object\\([^)]{1,120}\\)\\s*\\(\\s*['\"]/(api|auth|authStaff|file|logout|pageHits|report)|\\b[a-zA-Z_$][\\w$]{0,40}\\s*\\(\\s*['\"]/(api|auth|authStaff|file|logout|pageHits|report)|\\$ajaxRequest" <target>
-rg -n "nacos|apollo|consul|eureka|swagger|knife4j|yapi|apifox|gitlab|github|gitee|jenkins|harbor|sentry|bugly|oss|cos|s3|minio|apk|ipa" <target>
-```
+- Clearly separate observed traffic, source evidence, mock/test data, and static inference.
+- Treat helper leads as prompts for review, not facts.
+- Put weak but useful leads in `不确定项/待复核`.
+- Do not commit generated analysis output, real target data, HAR/pcap files, credentials, screenshots, or recovered source from private targets.
 
 ## References
 
@@ -142,7 +118,7 @@ rg -n "nacos|apollo|consul|eureka|swagger|knife4j|yapi|apifox|gitlab|github|gite
 - Crypto patterns: `references/crypto-patterns.md`
 - Lazy chunk discovery: `references/chunk-discovery.md`
 - Source map completion: `references/source-map-completion.md`
-- AST/call graph mode: `references/ast-call-graph.md`
+- AST/call graph guidance: `references/ast-call-graph.md`
 - Mermaid output: `references/mermaid-output.md`
 - Website and intelligence summaries: `references/website-intelligence-analysis.md`
 - External asset intelligence: `references/asset-intelligence.md`

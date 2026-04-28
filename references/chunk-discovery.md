@@ -1,51 +1,25 @@
-# Lazy Chunk Discovery and Download
+# Lazy Chunk Discovery
 
-Modern JS projects often lazy-load route chunks. If a user downloaded only the first page or one runtime bundle, the analysis can miss important modules.
+Modern JS projects often lazy-load route chunks. Codex should inspect runtime bundle code directly for chunk maps and public paths.
 
-## Default Behavior
+## Search Leads
 
-Discovery is safe and offline:
-
-```bash
-node scripts/js-analyzer.mjs discover-chunks --out analysis-output
-```
-
-It reads existing local files and writes:
-
-- `analysis-output/analysis-state/chunk-candidates.json`
-- `analysis-output/analysis-state/checkpoints/checkpoint-002b-chunk-discovery.json`
-
-## Download Behavior
-
-Downloading remote chunks is network activity and must be explicit. Codex must ask the user before running it, and the CLI asks for each candidate unless `--yes` is supplied.
+Use:
 
 ```bash
-node scripts/js-analyzer.mjs download-chunks --out analysis-output
-node scripts/js-analyzer.mjs download-chunks --out analysis-output --base-url https://example.com/
-node scripts/js-analyzer.mjs download-chunks --out analysis-output --yes
+rg -n "__webpack_require__\\.u|__webpack_require__\\.p|webpackChunk|import\\(|sourceMappingURL|\\.chunk\\.js|async chunk|publicPath" <target>
 ```
 
-Downloaded files go under:
-
-```text
-analysis-output/downloaded-chunks/
-```
-
-Do not write downloaded chunks into the target source tree. After downloading, reset extraction/render tasks and run:
+The helper can surface chunk hints:
 
 ```bash
-node scripts/js-analyzer.mjs resume --out analysis-output
+node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name>
 ```
-
-## Candidate Types
-
-- `remote_url`: complete `https://...chunk.js` or protocol-relative URL.
-- `relative_url`: relative chunk path that can be resolved with `--base-url`.
-- `webpack_public_path`: inferred public path.
-- `source_map`: source-map URL/comment.
-- `needs_base_url`: useful candidate but cannot be fetched without an origin.
-- `local_exists`: a referenced chunk already exists in the local project.
 
 ## Review Rules
 
-Prefer downloading chunks that contain route names, chunk maps, source-map comments, or webpack runtime references. Skip ad/tracker/vendor chunks unless they appear to contain project business logic.
+- Prefer chunks tied to route names, business modules, source-map comments, or webpack runtime maps.
+- Skip ad/tracker/vendor chunks unless they appear to contain project business logic.
+- Do not write downloaded chunks into the target source tree.
+- Download remote chunks only after user approval.
+- After obtaining chunks, inspect them directly as additional source.

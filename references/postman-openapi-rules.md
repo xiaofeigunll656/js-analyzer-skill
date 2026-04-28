@@ -19,5 +19,4 @@
 
 ## Local HTML
 
-`swagger-ui.html` must be self-contained when possible. It should show project overview, progress, configs/accounts, external assets, APIs, and a request sender. If browser CORS blocks direct requests, use `scripts/swagger-proxy.mjs`.
-API cards should display inferred query, request body, response mock, and short evidence snippets so users can distinguish static reconstruction from live traffic.
+Codex may create local HTML API notes when the user asks, but this skill no longer bundles a Swagger proxy or generator. Keep any generated API workspace local and evidence-labeled so users can distinguish static reconstruction from observed traffic.
