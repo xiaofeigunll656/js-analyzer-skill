@@ -26,8 +26,9 @@ When the user says "analyze the xxx project under the current directory":
    node scripts/js-analyzer.mjs analyze ./xxx --out ./analysis-output/xxx
    ```
 
-3. Read `analysis-output/xxx/analysis-state/run-summary.md`.
-4. For web bundles, run chunk discovery. Ask the user before downloading remote chunks:
+3. If the output directory already contains a completed analysis, do not silently reuse it. Ask the user whether to rebuild; use `--fresh` only after they choose a clean re-analysis, or `--resume-existing` only when they explicitly want the old report.
+4. Read `analysis-output/xxx/analysis-state/run-summary.md`.
+5. For web bundles, run chunk discovery. Ask the user before downloading remote chunks:
 
    ```bash
    node scripts/js-analyzer.mjs discover-chunks --out ./analysis-output/xxx
@@ -36,7 +37,7 @@ When the user says "analyze the xxx project under the current directory":
    node scripts/js-analyzer.mjs download-sourcemaps --out ./analysis-output/xxx --base-url https://example.com/
    ```
 
-5. Inspect high-value artifacts manually when needed:
+6. Inspect high-value artifacts manually when needed:
    - `analysis.json`
    - API shards under `analysis-state/shards/`
    - webpack `.map` files and recovered `sourcesContent`
@@ -44,7 +45,7 @@ When the user says "analyze the xxx project under the current directory":
    - `analysis.callGraph`
    - request wrapper files
    - config files and Mini Program manifests
-6. Improve uncertain findings by targeted reads/searches, not by loading the whole project into context.
+7. Improve uncertain findings by targeted reads/searches, not by loading the whole project into context.
 
 ## High-Signal Search Terms
 

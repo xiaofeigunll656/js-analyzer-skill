@@ -21,7 +21,7 @@ await runFixture({
   }
 });
 
-await runFixture({
+const apiLiteralFixture = await runFixture({
   name: "api-literal-fallback",
   expectedPaths: ["/api/wallet/balance", "/webapi/coupon/detail"],
   assertions: (byPath) => {
@@ -29,6 +29,8 @@ await runFixture({
     assert.equal(byPath.get("/webapi/coupon/detail").metadata.extractor, "api-path-literal-fallback");
   }
 });
+
+await assertCompletedAnalysisRequiresChoice(apiLiteralFixture.fixtureRoot, apiLiteralFixture.outputRoot);
 
 await runFixture({
   name: "webpack-object-wrapper",
@@ -80,6 +82,42 @@ async function runFixture({ name, expectedPaths, assertions }) {
   assert.deepEqual(paths, expectedPaths, `${name}: wrapper internals should not create phantom APIs`);
   assertions(byPath);
   console.log(`${name}: ${(analysis.apis || []).length} API candidates extracted.`);
+  return { fixtureRoot, outputRoot };
+}
+
+async function assertCompletedAnalysisRequiresChoice(fixtureRoot, outputRoot) {
+  const analyzer = path.join(repoRoot, "scripts", "js-analyzer.mjs");
+  const repeatedCode = await runForCode(process.execPath, [
+    analyzer,
+    "analyze",
+    fixtureRoot,
+    "--out",
+    outputRoot
+  ]);
+  assert.notEqual(repeatedCode, 0, "completed analysis should require an explicit choice in non-interactive mode");
+
+  await run(process.execPath, [
+    analyzer,
+    "analyze",
+    fixtureRoot,
+    "--out",
+    outputRoot,
+    "--resume-existing"
+  ]);
+
+  await run(process.execPath, [
+    analyzer,
+    "analyze",
+    fixtureRoot,
+    "--out",
+    outputRoot,
+    "--fresh",
+    "--max-files-per-task",
+    "20",
+    "--max-bytes-per-task",
+    "200000"
+  ]);
+  console.log("completed-analysis-choice: explicit --fresh rebuild verified.");
 }
 
 function run(command, args) {
@@ -93,6 +131,20 @@ function run(command, args) {
     child.on("exit", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`${command} exited with ${code}`));
+    });
+  });
+}
+
+function runForCode(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      stdio: ["ignore", "ignore", "ignore"],
+      shell: false
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      resolve(code);
     });
   });
 }

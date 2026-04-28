@@ -20,6 +20,7 @@ Analyze only projects the user is authorized to inspect. Treat the analysis outp
    ```bash
    node scripts/js-analyzer.mjs analyze <target-project> --out analysis-output
    node scripts/js-analyzer.mjs resume --out analysis-output
+   node scripts/js-analyzer.mjs analyze <target-project> --out analysis-output --fresh
    node scripts/js-analyzer.mjs discover-chunks --out analysis-output
    ```
 
@@ -47,9 +48,12 @@ node scripts/js-analyzer.mjs analyze ./xxx --out ./analysis-output/xxx
 
 Then read `./analysis-output/xxx/analysis-state/run-summary.md` before doing any manual follow-up.
 
+`analyze` resumes only incomplete or failed plans. If `./analysis-output/xxx` already contains a completed analysis for the same target, the script must ask whether to re-analyze from scratch. In non-interactive runs it must stop instead of silently reusing old results; pass `--fresh` to rebuild clean outputs, or `--resume-existing` when the user explicitly wants to keep the completed report.
+
 If a report shows no APIs after upgrading this skill, do not trust the old rendered report until extraction has been rebuilt. Re-run with a fresh output directory, or force the extraction stage to rebuild:
 
 ```bash
+node scripts/js-analyzer.mjs analyze ./xxx --out ./analysis-output/xxx --fresh
 node scripts/js-analyzer.mjs analyze ./xxx --out ./analysis-output/xxx --force-rebuild-task extract.plan-batches
 node scripts/validate-outputs.mjs ./analysis-output/xxx
 ```
@@ -119,6 +123,8 @@ node scripts/js-analyzer.mjs download-sourcemaps --out <output-dir> --base-url <
 node scripts/js-analyzer.mjs discover-supplements --out <output-dir> [--local-cache-root <dir>[,<dir>]]
 node scripts/js-analyzer.mjs download-supplements --out <output-dir>
 node scripts/js-analyzer.mjs analyze <target-project> --out <output-dir> --force-rebuild-task <task-id>
+node scripts/js-analyzer.mjs analyze <target-project> --out <output-dir> --fresh
+node scripts/js-analyzer.mjs analyze <target-project> --out <output-dir> --resume-existing
 ```
 
 ## Output Model

@@ -26,6 +26,7 @@ Every meaningful task writes durable state before the next task starts. A new ch
 2. Read `analysis-state/plan.json`.
 3. Run `node scripts/js-analyzer.mjs status --out <output-dir>`.
 4. Run `node scripts/js-analyzer.mjs resume --out <output-dir>` when there are pending or failed tasks.
+5. If the previous run is already complete and the user asks to analyze the same project again, ask whether they want a fresh analysis. Use `node scripts/js-analyzer.mjs analyze <target> --out <output-dir> --fresh` only after they choose to rebuild, or `--resume-existing` only when they explicitly choose to keep the old report.
 
 ## Rebuilds
 

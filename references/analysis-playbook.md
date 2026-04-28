@@ -2,7 +2,7 @@
 
 ## Start
 
-Always inspect `analysis-state/` first. If `plan.json` exists, run `status` or `resume`. Never restart a large project without checking existing shards.
+Always inspect `analysis-state/` first. If `plan.json` exists and the run is incomplete or failed, run `status` or `resume`. If the run is already complete, ask the user whether to re-analyze; use `--fresh` for a clean rebuild or `--resume-existing` only when they explicitly want the old outputs. Never restart a large project without checking existing shards.
 
 When the user gives a natural prompt such as "analyze the xxx project under the current directory", resolve `xxx` relative to the current workspace and use an output directory named after the target project, for example `analysis-output/xxx`.
 

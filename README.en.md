@@ -120,6 +120,8 @@ Analyze a project:
 node scripts/js-analyzer.mjs analyze <target-project> --out analysis-output/<project-name>
 ```
 
+If the output directory already has a completed analysis for the same target, `analyze` asks whether to re-analyze. Non-interactive runs stop and require an explicit choice. Use `--fresh` to rebuild clean outputs, or `--resume-existing` to keep the previous report.
+
 Resume an interrupted analysis:
 
 ```bash

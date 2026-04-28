@@ -89,6 +89,8 @@ Options:
   --local-scan-max-entries <n>
   --local-scan-max-ms <n>
   --force-rebuild-task <task-id>
+  --fresh
+  --resume-existing
   --yes
 `;
   console.log(text.trim());
@@ -237,6 +239,8 @@ function normalizeOptions(options) {
     localScanMaxEntries: Number(options.localScanMaxEntries || DEFAULT_LOCAL_SCAN_MAX_ENTRIES),
     localScanMaxMs: Number(options.localScanMaxMs || DEFAULT_LOCAL_SCAN_MAX_MS),
     yes: Boolean(options.yes),
+    fresh: Boolean(options.fresh),
+    resumeExisting: Boolean(options.resumeExisting),
     forceRebuildTask: options.forceRebuildTask || null
   };
 }
@@ -7718,6 +7722,59 @@ async function renderOnly(irPath, outDir) {
   await runRenderSwagger(plan, p, findTask(plan, "render.swagger") || task("render.swagger", "Render local Swagger-style UI"));
 }
 
+function isSameAnalysisTarget(plan, targetPath) {
+  return path.resolve(plan.targetPath || "") === path.resolve(targetPath || "");
+}
+
+function isPlanComplete(plan) {
+  const tasks = plan.tasks || [];
+  return tasks.length > 0 && tasks.every((candidate) => candidate.status === "completed" || candidate.status === "skipped");
+}
+
+async function promptExistingCompletedAnalysis(plan, p) {
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      `Completed analysis already exists at ${p.out}. Use --fresh to re-analyze from scratch, ` +
+      `--resume-existing to keep the existing outputs, or choose a different --out directory.`
+    );
+  }
+
+  const rl = createInterface({ input, output });
+  try {
+    const answer = await rl.question(
+      `Completed analysis already exists for ${plan.targetPath} at ${p.out}.\n` +
+      "Re-analyze from scratch? [y]es/[n]o/[a]bort "
+    );
+    const normalized = answer.trim().toLowerCase();
+    if (/^(y|yes)$/i.test(normalized)) return "fresh";
+    if (/^(n|no)$/i.test(normalized) || normalized === "") return "resume-existing";
+    return "abort";
+  } finally {
+    rl.close();
+  }
+}
+
+async function startFreshAnalysis(target, p, normalizedOptions) {
+  await removeExistingAnalysisOutput(p.out, target);
+  await ensureStateDirs(p);
+  const plan = createPlan(path.resolve(target), p.out, normalizedOptions);
+  await savePlan(plan, p);
+  await appendJsonLine(p.progress, { runId: plan.runId, event: "created", targetPath: plan.targetPath, outputPath: plan.outputPath, fresh: true });
+  await writeRunSummary(plan, p);
+  await executePlan(plan, p);
+}
+
+async function removeExistingAnalysisOutput(outputDir, targetPath) {
+  const out = path.resolve(outputDir || DEFAULT_OUT);
+  const target = path.resolve(targetPath || "");
+  const cwd = path.resolve(process.cwd());
+  const root = path.parse(out).root;
+  if (out === root || out === cwd || out === target || (target && target.startsWith(`${out}${path.sep}`))) {
+    throw new Error(`Refusing to remove unsafe output directory for --fresh: ${out}`);
+  }
+  await fs.rm(out, { recursive: true, force: true });
+}
+
 async function main() {
   const { command, positionals, options } = parseCli(process.argv);
   const outDir = options.out || DEFAULT_OUT;
@@ -7778,6 +7835,22 @@ async function main() {
     const normalizedOptions = normalizeOptions(options);
     if (await exists(p.plan)) {
       const plan = await readJson(p.plan);
+      if (!isSameAnalysisTarget(plan, target)) {
+        if (normalizedOptions.fresh) {
+          await startFreshAnalysis(target, p, normalizedOptions);
+          return;
+        }
+        throw new Error(
+          `Existing analysis plan at ${p.plan} belongs to ${plan.targetPath}, not ${path.resolve(target)}. ` +
+          "Use a different --out directory or pass --fresh to replace that output directory."
+        );
+      }
+
+      if (normalizedOptions.fresh) {
+        await startFreshAnalysis(target, p, normalizedOptions);
+        return;
+      }
+
       if (normalizedOptions.forceRebuildTask) {
         if (!findTask(plan, normalizedOptions.forceRebuildTask)) {
           throw new Error(`Unknown task for --force-rebuild-task: ${normalizedOptions.forceRebuildTask}`);
@@ -7786,6 +7859,25 @@ async function main() {
         plan.options = { ...(plan.options || {}), ...normalizedOptions };
         await savePlan(plan, p);
       }
+
+      if (isPlanComplete(plan) && !normalizedOptions.forceRebuildTask) {
+        if (normalizedOptions.resumeExisting) {
+          console.log(`Completed analysis already exists at ${p.out}; keeping existing outputs.`);
+          return;
+        }
+        const decision = await promptExistingCompletedAnalysis(plan, p);
+        if (decision === "fresh") {
+          await startFreshAnalysis(target, p, normalizedOptions);
+          return;
+        }
+        if (decision === "resume-existing") {
+          console.log(`Completed analysis already exists at ${p.out}; keeping existing outputs.`);
+          return;
+        }
+        console.log("Analysis aborted. Existing outputs were left unchanged.");
+        return;
+      }
+
       console.log(`Existing analysis plan found at ${p.plan}; resuming.`);
       await executePlan(plan, p);
       return;

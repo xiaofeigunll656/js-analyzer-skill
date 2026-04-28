@@ -120,6 +120,8 @@ node scripts/js-analyzer.mjs status --out analysis-output/<project-name>
 node scripts/js-analyzer.mjs analyze <target-project> --out analysis-output/<project-name>
 ```
 
+如果该输出目录已经有同一目标的完整分析，`analyze` 会提示是否重新分析；非交互环境会停止并要求显式选择。使用 `--fresh` 重新生成干净输出，或使用 `--resume-existing` 明确沿用旧报告。
+
 续跑中断的分析：
 
 ```bash
