@@ -12,6 +12,7 @@ Search for these calls and wrappers:
 - `uni.request({ url, method, data, header })`
 - `Taro.request({ url, method, data, header })`
 - wrappers named `request`, `http`, `service`, `api`, `ajax`, `client`, `httpClient`
+- obfuscated bundle wrapper call sites: `Object(alias)("/path", data)`, `s("/path", data)`, `g["a"]("/path", data)`, `this.$ajaxRequest("/path", data)`
 - interceptors: `axios.interceptors.request`, `axios.interceptors.response`
 
 ## URL Construction
@@ -22,6 +23,7 @@ Track:
 - template strings and concatenation
 - environment maps: `dev`, `test`, `stage`, `pre`, `prod`
 - request prefixes and route constants
+- strong backend-looking path literals with prefixes such as `/api`, `/webapi`, `/auth`, `/authStaff`, `/logout`, `/file`, `/pageHits`, `/upload`, `/download`, `/report`, `/user`, `/staff`, `/resource`, `/role`, and `/permission`
 
 ## Parameters
 

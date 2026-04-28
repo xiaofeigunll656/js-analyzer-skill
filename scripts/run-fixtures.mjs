@@ -30,6 +30,29 @@ await runFixture({
   }
 });
 
+await runFixture({
+  name: "webpack-object-wrapper",
+  expectedPaths: [
+    "/auth/getUserInfo",
+    "/auth/getUserMenus",
+    "/authStaff/getMenuNoAuthorize",
+    "/authStaff/initWoegoRoleAndResource",
+    "/file/image",
+    "/logout",
+    "/pageHits/getPageHitsCount",
+    "/pageHits/savePageHits",
+    "/report/list",
+    "/user/profile"
+  ],
+  assertions: (byPath) => {
+    assert.equal(byPath.get("/auth/getUserInfo").metadata.extractor, "bundle-wrapper-url-callsite");
+    assert.equal(byPath.get("/auth/getUserInfo").method, "POST");
+    assert.deepEqual(byPath.get("/auth/getUserInfo").body, { userId: "u001" });
+    assert.deepEqual(byPath.get("/user/profile").body, { userId: "u002" });
+    assert.equal(byPath.get("/report/list").metadata.extractor, "bundle-wrapper-url-callsite");
+  }
+});
+
 async function runFixture({ name, expectedPaths, assertions }) {
   const fixtureRoot = path.join(repoRoot, "assets", "synthetic-fixtures", name);
   const outputRoot = path.join(repoRoot, "analysis-output", `synthetic-${name}`);

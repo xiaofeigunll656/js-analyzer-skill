@@ -94,6 +94,7 @@ Supplement discovery performs a bounded local scan before recommending network w
 9. Generate outputs only from `analysis.json`, not from separate hand-maintained copies.
 10. Render `project-report.md` in Chinese by default. The report must start with an overview and an explicit structure/function/API map, then present API details in the repeatable shape: interface, parameter source, parameter table, minimal request example, response package, possible response example, and evidence.
 11. When script output is incomplete, use the Codex method in `references/codex-analysis-method.md`: targeted `rg`, source-map reading, wrapper/interceptor tracing, and manual review of uncertain code slices.
+12. Treat the bundled script as the deterministic first pass, not the whole analysis. If the API list is empty or obviously too small, combine tool output with Codex reasoning: search for API-looking literals, inspect nearby call sites, trace short/aliased wrappers, then rerun or patch extraction before rendering the final report.
 
 ## Resume Contract
 
@@ -155,6 +156,7 @@ Prioritize findings that help an engineer understand and operate the project:
 
 - Request construction: wrappers, interceptors, base URLs, headers, tokens, nonce/timestamp, signature flow.
 - Webpack bundle request body flow: resolve `__webpack_require__.d(exports,{alias:function(){return localFn}})` / `n.d(t,{a:function(){return i}})` exports, `var api=n(2568)` imports, and `api.a({...})` callsites back to wrapper function parameters before falling back to broad regex inference.
+- Obfuscated wrapper call sites: detect API calls hidden behind `Object(alias)("/path", data)`, short functions such as `s("/path", data)`, and framework helpers such as `this.$ajaxRequest("/path", data)` when the surrounding code, promise chaining, or strong path prefix indicates a request wrapper.
 - API shape inference: derive path/query parameters from URL strings, request body/query examples from wrapper second arguments and same-file call-site object literals, and response hints from direct `res.data` / `success(res)` usage. Mark these as static inferred mocks unless confirmed by source docs or runtime evidence.
 - Project shape: routes, pages, chunks, modules, feature names, menu/permission codes, i18n keys, event names.
 - Runtime environment: dev/test/stage/pre/prod endpoints, WebSocket/SSE/MQTT/GraphQL, uploads/downloads.

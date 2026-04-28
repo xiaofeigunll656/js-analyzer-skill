@@ -52,6 +52,7 @@ Use `rg` before broad reading:
 
 ```bash
 rg -n "wx\\.request|uni\\.request|Taro\\.request|axios|fetch\\(|XMLHttpRequest|baseURL|baseUrl|Authorization|token|sign|signature|CryptoJS|createHmac|createHash|JSEncrypt|sm2|sm3|sm4" <target>
+rg -n "Object\\([^)]{1,120}\\)\\s*\\(\\s*['\"]/(api|auth|authStaff|file|logout|pageHits|report)|\\b[a-zA-Z_$][\\w$]{0,40}\\s*\\(\\s*['\"]/(api|auth|authStaff|file|logout|pageHits|report)|\\$ajaxRequest" <target>
 rg -n "nacos|apollo|consul|eureka|swagger|knife4j|gitlab|github|gitee|jenkins|harbor|sentry|bugly|oss|cos|s3|apk|ipa" <target>
 ```
 
@@ -88,6 +89,7 @@ For downloaded frontend bundles:
 - Discover missing lazy chunks from `__webpack_require__.u`, `__webpack_require__.p`, chunk filename maps, `import()` URLs, script-loader code, and source-map comments.
 - Discover missing source maps from `sourceMappingURL` and `.js.map` strings, then ask the user before downloading.
 - If no source map exists, use string islands: URLs, route paths, permission codes, i18n text, SDK names, and API prefixes.
+- Do not stop at `axios/fetch/wx.request` regexes. Many minified bundles expose request helpers as `Object(g["a"])("/auth/getUserInfo", data)`, `s("/file/image", data)`, or `this.$ajaxRequest("/pageHits/savePageHits", data)`. When these paths are visible, trace the nearest wrapper and include them as static API candidates with lower confidence if the exact runtime method is not confirmed.
 - Deduplicate repeated strings across chunks and preserve which chunk contained the evidence.
 
 ## Website and Intelligence Diagrams

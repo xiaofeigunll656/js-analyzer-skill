@@ -2385,6 +2385,8 @@ function extractApis(shard, file, text, options) {
     });
   }
 
+  collectBundleWrapperApiCalls(apiMatches, text, stringConstants, functionRanges, webpackDataFlow);
+
   if (apiMatches.length === 0) {
     collectApiPathLiteralFallback(apiMatches, text, stringConstants);
   }
@@ -2434,6 +2436,144 @@ function extractApis(shard, file, text, options) {
   }
 }
 
+function collectBundleWrapperApiCalls(apiMatches, text, stringConstants, functionRanges, webpackDataFlow) {
+  const callRe = /(?:\bObject\s*\(\s*[^)]{1,120}\)\s*|\bthis\s*\.\s*\$?[A-Za-z_$][\w$]*\s*|\b[A-Za-z_$][\w$]{0,40}\s*(?:\.\s*[A-Za-z_$][\w$]{1,40}|\[\s*['"][^'"]{1,40}['"]\s*\])\s*|\b[A-Za-z_$][\w$]{0,40}\s*)\(/g;
+  for (const match of findAll(callRe, text)) {
+    const call = splitCallArguments(text, match.index + match[0].length - 1, 3200);
+    if (!call || call.args.length === 0) continue;
+    const rawUrlArg = call.args[0] || "";
+    const url = resolveUrlExpression(rawUrlArg, stringConstants);
+    if (!url || !looksLikeApiUrl(url) || !hasConcreteApiPath(url)) continue;
+    if (isLikelyBaseApiRoot(url)) continue;
+    if (hasApiPathMatch(apiMatches, url)) continue;
+    if (!isLikelyBundleApiCall(text, match, call, url)) continue;
+
+    const method = inferBundleWrapperMethod(text, match, call);
+    const bodyArg = call.args[1] || "";
+    const requestInference = inferRequestFromBundleArgs(bodyArg, method, text, match.index, functionRanges, webpackDataFlow);
+    const responseInference = inferResponseFromSnippet(responseSnippetAfterCall(text, call.end));
+    apiMatches.push({
+      method,
+      url,
+      index: match.index,
+      extractor: "bundle-wrapper-url-callsite",
+      confidence: confidenceForBundleApiCall(text, match, call, url),
+      metadata: {
+        calleeExpression: match[0].slice(0, -1).trim(),
+        rawExpression: rawUrlArg.trim().slice(0, 1000),
+        secondArgument: bodyArg.trim().slice(0, 1000),
+        ...requestInference,
+        ...responseInference
+      }
+    });
+  }
+
+  const concatPathRe = /(?:return|url\s*:|href\s*:)\s*[^;\n]{0,160}(['"`])(\/(?:api|auth|authStaff|logout|file|pageHits|upload|download|report|reportsv|menus?|user|staff|resource|role|permission)[^'"`]{0,300})\1/gi;
+  for (const match of findAll(concatPathRe, text)) {
+    const url = match[2];
+    if (!url || !looksLikeApiUrl(url) || !hasConcreteApiPath(url)) continue;
+    if (isLikelyBaseApiRoot(url)) continue;
+    if (hasApiPathMatch(apiMatches, url)) continue;
+    if (/\b(?:return\s+)?[A-Za-z_$][\w$]*\s*\(\s*['"`]\//.test(match[0])) continue;
+    apiMatches.push({
+      method: "GET",
+      url,
+      index: match.index,
+      extractor: "strong-api-path-literal",
+      confidence: 0.62,
+      metadata: {
+        rawExpression: match[0].trim().slice(0, 1000),
+        requestConstruction: "Strong API-looking path literal found outside a direct request call; confirm runtime caller."
+      }
+    });
+  }
+}
+
+function hasApiPathMatch(apiMatches, url) {
+  const parsed = parseApiUrl(url);
+  const pathValue = parsed.path || url;
+  return (apiMatches || []).some((item) => {
+    const existing = parseApiUrl(item.url);
+    return (existing.path || item.url) === pathValue;
+  });
+}
+
+function isLikelyBundleApiCall(text, match, call, url) {
+  const callee = match[0].slice(0, -1).trim();
+  const after = text.slice(call.end, Math.min(text.length, call.end + 260));
+  const before = text.slice(Math.max(0, match.index - 160), match.index);
+  if (/\$?ajax|request|http|axios|fetch|service|client/i.test(callee)) return true;
+  if (/^Object\s*\(/.test(callee) && /\.(?:then|catch|finally)\s*\(/.test(after)) return true;
+  if (/\.(?:then|catch|finally)\s*\(/.test(after) && looksLikeStrongApiPath(url)) return true;
+  if (/Vue\.prototype\.\$ajaxRequest|prototype\.\$ajaxRequest|request wrapper/i.test(before + after)) return true;
+  return looksLikeStrongApiPath(url) && call.args.length > 1 && /^\s*(?:\{|\w|Object\()/i.test(call.args[1] || "");
+}
+
+function looksLikeStrongApiPath(value) {
+  const text = String(value || "");
+  if (/^https?:\/\/[^/]+\/(?:api|webapi|gateway|service|v\d+|auth|authStaff|file|pageHits|reportsv)\b/i.test(text)) return true;
+  return /^\/(?:api|webapi|gateway|service|v\d+|auth|authStaff|logout\b|file\b|pageHits\b|upload\b|download\b|report|reportsv|menus?\b|user\b|staff\b|resource\b|role\b|permission\b)/i.test(text);
+}
+
+function isLikelyBaseApiRoot(value) {
+  const text = String(value || "").replace(/[?#].*$/, "");
+  return /^\/api[-_/]?[A-Za-z0-9_-]*$/i.test(text) || /^\/(?:webapi|gateway|service|v\d+)$/i.test(text);
+}
+
+function confidenceForBundleApiCall(text, match, call, url) {
+  const callee = match[0].slice(0, -1).trim();
+  const after = text.slice(call.end, Math.min(text.length, call.end + 260));
+  let score = 0.66;
+  if (/\$?ajax|request|http|axios|fetch|service|client/i.test(callee)) score += 0.14;
+  if (/^Object\s*\(/.test(callee)) score += 0.08;
+  if (/\.(?:then|catch|finally)\s*\(/.test(after)) score += 0.08;
+  if (looksLikeStrongApiPath(url)) score += 0.08;
+  if (String(url).includes("${")) score -= 0.08;
+  return Math.max(0.55, Math.min(0.9, Number(score.toFixed(2))));
+}
+
+function inferBundleWrapperMethod(text, match, call) {
+  const callee = match[0].slice(0, -1);
+  const after = text.slice(call.end, Math.min(text.length, call.end + 220));
+  const before = text.slice(Math.max(0, match.index - 220), match.index);
+  const context = `${before}\n${callee}\n${call.args.slice(0, 3).join("\n")}\n${after}`;
+  const explicit = extractObjectString(context, ["method", "type", "meth"]);
+  if (explicit) return explicit.toUpperCase();
+  if (/\.(get|post|put|patch|delete|head|options)\s*$/i.test(callee)) return RegExp.$1.toUpperCase();
+  if (/url:\s*p\s*\+\s*t|data:\s*u|JSON\.stringify|Content-Type|application\/json|x-www-form-urlencoded/i.test(context)) return "POST";
+  return "POST";
+}
+
+function inferRequestFromBundleArgs(bodyArg, method, text, index, functionRanges, webpackDataFlow) {
+  const arg = String(bodyArg || "").trim();
+  if (!arg) return {};
+  const mock = inferMockFromArgument(arg, text, index, functionRanges, webpackDataFlow);
+  if (Object.keys(mock).length > 0) {
+    const upperMethod = String(method || "GET").toUpperCase();
+    const query = ["GET", "HEAD"].includes(upperMethod) ? mock : {};
+    const body = ["GET", "HEAD"].includes(upperMethod) ? {} : mock;
+    return {
+      query,
+      body,
+      queryKeys: Object.keys(query),
+      bodyKeys: Object.keys(body),
+      bodyInferenceSources: webpackParamInferenceSources(webpackDataFlow, text, index, functionRanges, [arg])
+    };
+  }
+  if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
+    return {
+      body: { [arg]: `{{${arg}}}` },
+      bodyKeys: [arg],
+      bodyInferenceSources: ["bundle wrapper second argument identifier"]
+    };
+  }
+  return {
+    body: { value: "{{requestBody}}" },
+    bodyKeys: ["value"],
+    bodyInferenceSources: ["bundle wrapper second argument expression"]
+  };
+}
+
 function collectApiPathLiteralFallback(target, text, constants) {
   const seen = new Set();
   const literalRe = /(['"`])([^'"`\r\n]{2,700})\1/g;
@@ -2473,7 +2613,8 @@ function looksLikeApiLiteralCandidate(value) {
       return false;
     }
   }
-  return /^\/(?:api|webapi|gateway|gw|service|rest|graphql|cgi-bin|sns|wxa|v\d+)(?:\/|$|[?&#.-])/i.test(pathValue) ||
+  return looksLikeStrongApiPath(raw) ||
+    /^\/(?:api|webapi|gateway|gw|service|rest|graphql|cgi-bin|sns|wxa|v\d+)(?:\/|$|[?&#.-])/i.test(pathValue) ||
     /\/(?:api|webapi|gateway|service|cgi-bin|sns|wxa|v\d+)\/[A-Za-z0-9_.~/-]{2,}/i.test(pathValue);
 }
 
