@@ -5,7 +5,7 @@ Use this playbook to guide Codex's own analysis. The small helper script can col
 ## Start
 
 1. Resolve the target path and confirm it is inside the authorized workspace.
-2. Read prior local notes, `project-report.md`, or `codex-js-leads.md/json` when present.
+2. Read prior local notes, `project-report.md`, or scratch `codex-js-leads.json` when present.
 3. If a prior report is weak or script-heavy, refresh from source.
 4. Use `codex-analysis-method.md` for the reasoning flow.
 5. Use `perspective-checklists.md` before final reporting.
@@ -37,13 +37,13 @@ Classify with cumulative evidence:
 For large or minified projects, generate a lead index:
 
 ```bash
-node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name> --json-only
 ```
 
-Review the generated Markdown first, then inspect the source files behind high-confidence leads. Do not copy helper output into the report without manual confirmation.
+Review the JSON as a scratch lead index, then inspect the source files behind high-confidence leads. Do not copy helper output into the report without manual confirmation, and do not list scratch helper files as deliverables.
 
 ## Merge And Report
 
 Deduplicate by normalized value plus source category. Preserve multiple evidence references. Keep low-confidence but useful leads in `不确定项/待复核`.
 
-Write Markdown when the evidence is ready. Optional Postman/OpenAPI/Mermaid artifacts can be created by Codex from the final evidence-backed API model when the user asks for them.
+Write only `project-report.md` when the evidence is ready. If confirmed request/response encryption, decryption, or signing needs reusable reproduction, generate one Node.js `crypto-helper.mjs` and document exact usage in the report. Optional Postman/OpenAPI/Mermaid artifacts can be created only when the user explicitly asks for them.

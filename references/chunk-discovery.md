@@ -13,7 +13,7 @@ rg -n "__webpack_require__\\.u|__webpack_require__\\.p|webpackChunk|import\\(|so
 The helper can surface chunk hints:
 
 ```bash
-node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name> --json-only
 ```
 
 ## Review Rules

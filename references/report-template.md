@@ -10,15 +10,16 @@
 4. 项目结构与运行信息
 5. 小程序元数据（如适用）
 6. 功能模块
-7. 接口清单
-8. 接口详情
-9. 请求封装、鉴权与签名
-10. 插件和外部服务
-11. 补充文件线索
-12. 安全与复核事项
-13. 输出文件（如生成）
-14. Mermaid 结构图（如有）
-15. 可折叠原始附录
+7. 请求封装、鉴权、签名与加解密
+8. 接口清单
+9. 接口详情
+10. 插件、第三方服务和外部资产
+11. 敏感配置、账号和运维线索
+12. 补充文件线索：chunk/source map/H5/plugin
+13. 可调用脚本（仅当生成 `crypto-helper.mjs`）
+14. 安全与复核事项
+
+Do not add standalone raw appendices, Mermaid-only files, Postman/OpenAPI exports, JSON summaries, CSV tables, screenshots, or copied source unless the user explicitly asks. Keep raw evidence inside concise report sections or local scratch only.
 
 ## Opening Requirements
 
@@ -29,6 +30,7 @@ The beginning must quickly answer:
 - 项目有哪些接口：域名/网关、HTTP 方法分布、接口前缀、完整接口索引、主要 wrapper。
 - 请求如何构造：base URL、headers、token、tenant/org/user ID、content type、签名/加密、错误处理。
 - 返回如何判断：真实响应包（如用户提供）、前端读取字段、mock/docs/类型定义、静态推断限制。
+- 是否存在可调用脚本：只有确认请求/响应加解密或签名逻辑时才生成 Node.js `crypto-helper.mjs`，否则明确写“未确认需要额外脚本的加解密/签名流程”。
 
 ## API Detail Shape
 
@@ -52,8 +54,14 @@ Each API detail must follow this shape, similar to a manual API note:
 - Clearly separate observed traffic from static inference.
 - Include low-confidence but useful leads in "不确定项/待复核", not as certain facts.
 - Keep concise tables in overview sections, but make API details explicit enough for an engineer to copy a request shape and trace it back to source evidence.
-- Keep full raw values available through local artifacts or collapsible appendices when generated.
+- Keep the report self-contained enough for handoff without relying on helper JSON/Markdown.
 
-## Appendices
+## Optional Node.js Helper Section
 
-Inside raw appendices include website analyst view, intelligence analyst view, lazy chunk discovery, source-map discovery, architecture/modules, features, call graph, complete API candidate table, configs, external assets, developer signals, operations signals, third-party services, evidence highlights, and uncertainties.
+Include this section only when a script is generated:
+
+- `脚本路径`：usually `crypto-helper.mjs` next to `project-report.md`.
+- `作用范围`：which wrapper/interceptor/API uses the flow and whether it signs requests, encrypts request bodies, or decrypts responses.
+- `证据`：file:line references for algorithm, key/iv/salt/nonce/timestamp sources, canonicalization, and call sites.
+- `用法`：exact command examples, required Node.js version, and dependency install command if the script needs a third-party package.
+- `限制`：dynamic keys, missing traffic samples, unconfirmed padding/mode, or response fields that still need validation.

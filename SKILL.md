@@ -1,6 +1,6 @@
 ---
 name: js-analyzer-skill
-description: Codex-only, AI-led analysis of authorized JavaScript, TypeScript, WeChat Mini Program, unpacked Mini Program, webpack/browserify bundle, minified, or obfuscated frontend projects. Use when Codex must decide how to inspect JS projects directly, trace request/response behavior, recover APIs, sensitive configs, accounts, source-map/chunk leads, crypto/signature logic, operations signals, and write useful evidence-backed Markdown reports. Includes only small Codex helper scripts for evidence lead collection and validation; no script is the analyst.
+description: Codex-only, AI-led analysis of authorized JavaScript, TypeScript, WeChat Mini Program, unpacked Mini Program, webpack/browserify bundle, minified, or obfuscated frontend projects. Use when Codex must inspect JS projects directly, trace request/response behavior, recover APIs, sensitive configs, accounts, source-map/chunk leads, crypto/signature logic, operations signals, and write one evidence-backed Chinese `project-report.md`; optional extra output is a Node.js crypto/signature helper only when confirmed request/response encryption, decryption, or signing exists. Includes small Codex helper scripts for internal evidence lead collection and validation; no script is the analyst.
 ---
 
 # JS Analyzer Skill
@@ -13,18 +13,20 @@ AI decides how to analyze the project.
 
 Use normal Codex tools first: `rg`, file reads, source-map inspection, targeted code slices, and reasoning. If Codex can see or infer something directly, do not add or run a JS script for that job.
 
-Use the bundled helper only as a small evidence indexer:
+Final user-visible output is intentionally small:
+
+- Always write exactly one Chinese summary report named `project-report.md`.
+- Do not create Postman, OpenAPI, Mermaid, JSON, CSV, extra Markdown, screenshots, copied source, recovered bundles, or evidence dumps unless the user explicitly asks.
+- The only default exception is one Node.js helper script when confirmed request/response encryption, decryption, or signing is needed for user reuse. Prefer a single `crypto-helper.mjs` with subcommands over many scripts.
+- Any optional helper script must be documented inside `project-report.md`: where the crypto/signature flow is used, what evidence supports it, what the script reproduces, required inputs, and exact commands.
+
+Use the bundled lead helper only as an internal scratch evidence indexer when a large/minified project makes direct reading inefficient:
 
 ```bash
-node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name> --json-only
 ```
 
-This writes:
-
-- `codex-js-leads.json`: machine-readable leads with evidence.
-- `codex-js-leads.md`: a compact checklist for Codex to review.
-
-These files are not the report and not truth. They are a map of places Codex should inspect manually.
+`codex-js-leads.json` is not a deliverable and not truth. It is a disposable map of places Codex should inspect manually. Do not mention it as an output file in the final report unless the user asks how the analysis was performed.
 
 ## Analysis Workflow
 
@@ -50,8 +52,9 @@ These files are not the report and not truth. They are a map of places Codex sho
 7. Search for non-API intelligence and security leads:
    - appids, default/test accounts, hardcoded passwords, tokens, ak/sk, private keys, webhooks, DSNs, storage buckets, API docs, repos, CI/CD, Nacos/Apollo/Consul/Eureka, monitoring, payment/SMS/captcha/maps/push/analytics
    - source-map local paths, developer names/emails/phones, build users, internal domains, gateway/service names
-8. Write the Markdown report in Chinese by default. The report must lead with conclusions, then evidence. It should be useful even when no helper script was run.
-9. Before finishing, do a miss-finding pass: search likely unreported APIs, sensitive keys, accounts, storage keys, auth headers, crypto/signature terms, source maps, chunks, and operations endpoints. Put weak leads in `不确定项/待复核`.
+8. If request or response encryption/decryption/signing is confirmed, decide whether a reusable Node.js helper is useful. Generate at most one `crypto-helper.mjs` unless the user requests otherwise. Prefer Node standard library; if a third-party package is required, document the install command and why.
+9. Write `project-report.md` in Chinese. The report must lead with conclusions, then evidence, and include any optional crypto helper usage. It should be useful even when no helper script was run.
+10. Before finishing, do a miss-finding pass: search likely unreported APIs, sensitive keys, accounts, storage keys, auth headers, crypto/signature terms, source maps, chunks, and operations endpoints. Put weak leads in `不确定项/待复核`.
 
 ## Helper Script Boundary
 
@@ -66,7 +69,7 @@ These files are not the report and not truth. They are a map of places Codex sho
 - source-map and chunk hints
 - developer/build signals
 
-Use it when it saves time on a large or minified project. Skip it when direct reading is faster.
+Use it only when it saves meaningful time on a large or minified project. Skip it when direct reading is faster, and do not treat its files as final outputs.
 
 Do not use helper output to replace:
 
@@ -77,17 +80,17 @@ Do not use helper output to replace:
 - severity/risk judgment
 - final report writing
 
-Validate helper output when needed:
+Validate scratch helper output when needed:
 
 ```bash
-node scripts/validate-outputs.mjs analysis-output/<project-name>
+node scripts/validate-outputs.mjs analysis-output/<project-name> --json-only
 ```
 
 Remote downloads, target build scripts, dynamic evaluation, deobfuscator execution, packet replay, and live API calls are separate explicit user-approved work. The bundled helper never executes target project code.
 
 ## Report Contract
 
-The final `project-report.md` must quickly answer:
+The final `project-report.md` is the required deliverable and must quickly answer:
 
 - 项目是什么：类型、框架/运行时、入口、页面/路由、模块、构建/部署线索。
 - 项目做什么：从页面、文案、路由、权限码、事件、接口和资源推断出的主要业务流程。
@@ -96,6 +99,15 @@ The final `project-report.md` must quickly answer:
 - 返回如何判断：真实响应包（如有）、前端读取字段、表格/表单绑定、success/error 处理、mock/type/docs 线索、静态推断限制。
 - 有哪些敏感和运维线索：账号、密码、token、appid、ak/sk、repo、Swagger/Knife4j/YApi/Apifox、Nacos/Apollo、CI/CD、监控、存储/CDN、第三方 SDK。
 - 还有什么不确定：动态 URL、缺失 chunk/source map/plugin、弱参数猜测、未确认响应 schema、下一步应读哪些文件。
+
+If a `crypto-helper.mjs` is generated, the report must also include:
+
+- 脚本路径和 Node.js 版本要求。
+- 复现的流程：签名、请求加密、响应解密，或它们的组合。
+- 使用位置：wrapper/interceptor/API、文件行号、请求字段或响应字段。
+- 输入参数：token、timestamp、nonce、body、query、key、iv、public/private key 等来源。
+- 命令示例：至少一个可直接复制的 `node crypto-helper.mjs ...` 示例。
+- 限制：未确认字段、动态密钥、缺失响应样本、需要第三方依赖等。
 
 Each API detail should follow `references/report-template.md`: interface summary, business meaning, parameter source, parameter table, minimal request package, response package, possible response example, evidence, and uncertainty.
 
@@ -106,7 +118,8 @@ Each API detail should follow `references/report-template.md`: interface summary
 - Clearly separate observed traffic, source evidence, mock/test data, and static inference.
 - Treat helper leads as prompts for review, not facts.
 - Put weak but useful leads in `不确定项/待复核`.
-- Do not commit generated analysis output, real target data, HAR/pcap files, credentials, screenshots, or recovered source from private targets.
+- Do not create extra user-visible artifacts for raw evidence. Keep scratch leads/evidence under ignored local directories only when they materially help analysis.
+- Do not commit generated analysis output, real target data, HAR/pcap files, credentials, screenshots, crypto helper scripts generated for real targets, or recovered source from private targets.
 
 ## References
 

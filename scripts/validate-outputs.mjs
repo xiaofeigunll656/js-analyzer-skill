@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 function usage() {
-  console.error("Usage: node scripts/validate-outputs.mjs <codex-leads-output-dir>");
+  console.error("Usage: node scripts/validate-outputs.mjs <codex-leads-output-dir> [--json-only]");
   process.exit(1);
 }
 
@@ -22,10 +22,12 @@ function assert(condition, message) {
 
 async function validate(outDir) {
   const out = path.resolve(outDir);
+  const jsonOnly = process.argv.includes("--json-only");
   const jsonPath = path.join(out, "codex-js-leads.json");
   const mdPath = path.join(out, "codex-js-leads.md");
   assert(await exists(jsonPath), `Missing Codex leads JSON: ${jsonPath}`);
-  assert(await exists(mdPath), `Missing Codex leads Markdown: ${mdPath}`);
+  const hasMarkdown = await exists(mdPath);
+  if (!jsonOnly) assert(hasMarkdown, `Missing Codex leads Markdown: ${mdPath}`);
 
   const leads = JSON.parse(await fs.readFile(jsonPath, "utf8"));
   assert(String(leads.schemaVersion || "").startsWith("codex-js-leads/"), "Invalid schemaVersion");
@@ -49,19 +51,23 @@ async function validate(outDir) {
     assert(Array.isArray(leads.leads[category]), `leads.${category} must be an array`);
   }
 
-  const md = await fs.readFile(mdPath, "utf8");
-  assert(md.includes("Codex JS Leads"), "Markdown should identify the artifact");
-  assert(md.includes("Codex Review Checklist"), "Markdown should include Codex review checklist");
+  if (hasMarkdown) {
+    const md = await fs.readFile(mdPath, "utf8");
+    assert(md.includes("Codex JS Leads"), "Markdown should identify the artifact");
+    assert(md.includes("Codex Review Checklist"), "Markdown should include Codex review checklist");
+  }
 
   console.log(JSON.stringify({
     ok: true,
     outputDir: out,
+    jsonOnly,
+    markdown: hasMarkdown,
     leadCounts: leads.leadCounts,
     evidence: leads.evidence.length
   }, null, 2));
 }
 
-const outDir = process.argv[2];
+const outDir = process.argv.slice(2).find((arg) => !arg.startsWith("--"));
 if (!outDir || outDir === "-h" || outDir === "--help") usage();
 
 validate(outDir).catch((error) => {

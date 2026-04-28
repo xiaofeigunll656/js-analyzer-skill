@@ -14,7 +14,8 @@
 - 从源码、mock、类型定义、UI 读取字段、成功/失败分支、HAR/请求响应包中判断返回结构。
 - 发现 appid、默认/测试账号、硬编码密码、token、ak/sk、私钥、webhook、DSN、存储桶、API 文档、仓库、CI/CD、监控、配置中心等线索。
 - 识别 source map、本地构建路径、开发者信息、运维系统、第三方 SDK、crypto/signature 逻辑。
-- 默认输出中文 `project-report.md`，报告要能直接给工程师或授权审计人员阅读。
+- 默认只输出中文 `project-report.md`，报告要能直接给工程师或授权审计人员阅读。
+- 只有确认请求/响应存在加密、解密或签名流程且用户需要复现时，才额外输出一个 Node.js `crypto-helper.mjs`，并在报告中写明用法。
 
 ## Codex 工作流
 
@@ -24,29 +25,39 @@
 4. 先追请求封装和鉴权/签名，再列接口。
 5. 对每个接口恢复请求包、参数来源、返回包线索、证据和不确定项。
 6. 从项目架构、资深开发、网站/产品、情报、普通用户、授权安全评估等视角补全。
-7. 写中文报告，并在结束前做一次漏检搜索。
+7. 写中文 `project-report.md`，并在结束前做一次漏检搜索。
 
-## 小脚本
+## 输出约定
 
-唯一推荐的分析辅助脚本是：
+默认用户可见输出只有：
+
+| 文件 | 什么时候生成 |
+| --- | --- |
+| `project-report.md` | 每次 JS 项目分析都生成，中文总结报告。 |
+| `crypto-helper.mjs` | 仅当确认请求/响应加解密或签名逻辑，并且复现脚本对用户有用时生成。 |
+
+不要默认生成 Postman、OpenAPI、Mermaid、JSON、CSV、额外 Markdown、截图、拷贝源码、恢复后的 bundle 或证据包。若生成 `crypto-helper.mjs`，必须在 `project-report.md` 中说明：哪里用了加解密/签名、脚本支持哪些命令、需要哪些输入、如何调用、还有哪些限制。
+
+## 内部线索脚本
+
+唯一推荐的内部分析辅助脚本是：
 
 ```bash
-node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name> --json-only
 ```
 
-它会生成：
+它会生成一个 scratch 文件：
 
 | 文件 | 用途 |
 | --- | --- |
 | `codex-js-leads.json` | API、请求调用、敏感配置、账号、域名、source map、chunk、crypto、运维和开发者线索。 |
-| `codex-js-leads.md` | 给 Codex 阅读的线索摘要和复核清单。 |
 
-这个脚本只做本地文本扫描，不执行目标项目代码，不生成最终报告。它的输出只是“让 Codex 去看的地图”，不是结论。
+这个脚本只做本地文本扫描，不执行目标项目代码，不生成最终报告。它的输出只是“让 Codex 去看的地图”，不是结论，也不是用户交付物。
 
 校验小脚本输出：
 
 ```bash
-node scripts/validate-outputs.mjs analysis-output/<project-name>
+node scripts/validate-outputs.mjs analysis-output/<project-name> --json-only
 ```
 
 ## 报告结构
@@ -65,9 +76,8 @@ node scripts/validate-outputs.mjs analysis-output/<project-name>
 10. 插件、第三方服务和外部资产
 11. 敏感配置、账号和运维线索
 12. 补充文件线索：chunk/source map/H5/plugin
-13. 安全与复核事项
-14. Mermaid 结构图（如有）
-15. 可折叠原始附录
+13. 可调用脚本（仅当生成 `crypto-helper.mjs`）
+14. 安全与复核事项
 
 每个接口详情建议包含：
 
@@ -90,5 +100,5 @@ node scripts/validate-outputs.mjs analysis-output/<project-name>
 - 只分析你有授权检查的项目。
 - 默认本地报告会保留发现的真实值，包括 token、appid、内部 URL、默认账号、source-map 路径和其他敏感线索。
 - 只有在准备共享版报告时，才显式脱敏。
-- 不要提交生成的分析结果。本仓库已忽略 `analysis-output/`、`reports/`、`evidence/`、`*.analysis-output/` 和 `tests/`。
+- 不要提交生成的分析结果或真实目标的 `crypto-helper.mjs`。本仓库已忽略 `analysis-output/`、`reports/`、`evidence/`、`*.analysis-output/` 和 `tests/`。
 - 下载 chunk、source map、H5 或补充文件前，应先审查候选证据并获得用户批准。

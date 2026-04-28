@@ -14,7 +14,8 @@ The core rule is simple: **Codex is the analyst; scripts are not.** Codex decide
 - Infer response structures from source, mocks, types, UI-read fields, success/error branches, and user-provided HAR/request-response packets.
 - Find appids, default/test accounts, hardcoded passwords, tokens, ak/sk values, private keys, webhooks, DSNs, buckets, API docs, repos, CI/CD, monitoring, and config-center leads.
 - Identify source maps, local build paths, developer signals, operations systems, third-party SDKs, and crypto/signature logic.
-- Produce Chinese `project-report.md` reports by default for engineering handoff or authorized review.
+- Produce only a Chinese `project-report.md` by default for engineering handoff or authorized review.
+- Produce one optional Node.js `crypto-helper.mjs` only when confirmed request/response encryption, decryption, or signing logic should be reusable, and document its usage in the report.
 
 ## Codex Workflow
 
@@ -24,29 +25,39 @@ The core rule is simple: **Codex is the analyst; scripts are not.** Codex decide
 4. Trace request wrappers and auth/signature behavior before listing APIs.
 5. Reconstruct request packages, parameter sources, response leads, evidence, and uncertainty for each important API.
 6. Review from architecture, senior-developer, website/product, intelligence, normal-user, and authorized-security perspectives.
-7. Write the Chinese report and perform a final miss-finding search before finishing.
+7. Write the Chinese `project-report.md` and perform a final miss-finding search before finishing.
 
-## Small Helper
+## Output Contract
 
-The only recommended analysis helper is:
+Default user-visible outputs are limited to:
+
+| File | When it is generated |
+| --- | --- |
+| `project-report.md` | Generated for every JS project analysis as the Chinese summary report. |
+| `crypto-helper.mjs` | Generated only when confirmed request/response encryption, decryption, or signing logic exists and a reusable script is useful. |
+
+Do not generate Postman, OpenAPI, Mermaid, JSON, CSV, extra Markdown, screenshots, copied source, recovered bundles, or evidence dumps by default. If `crypto-helper.mjs` is generated, `project-report.md` must explain where crypto/signing is used, which commands the script supports, required inputs, how to call it, and remaining limitations.
+
+## Internal Lead Helper
+
+The only recommended internal analysis helper is:
 
 ```bash
-node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target-project> --out analysis-output/<project-name> --json-only
 ```
 
-It produces:
+It produces one scratch file:
 
 | File | Purpose |
 | --- | --- |
 | `codex-js-leads.json` | API, request call, sensitive config, account, domain, source-map, chunk, crypto, operations, and developer leads. |
-| `codex-js-leads.md` | A compact lead summary and review checklist for Codex. |
 
-The helper only scans local text. It does not execute target code and does not generate the final report. Its output is a map for Codex to inspect, not a conclusion.
+The helper only scans local text. It does not execute target code and does not generate the final report. Its output is a map for Codex to inspect, not a conclusion or user deliverable.
 
 Validate helper output:
 
 ```bash
-node scripts/validate-outputs.mjs analysis-output/<project-name>
+node scripts/validate-outputs.mjs analysis-output/<project-name> --json-only
 ```
 
 ## Report Shape
@@ -65,9 +76,8 @@ node scripts/validate-outputs.mjs analysis-output/<project-name>
 10. 插件、第三方服务和外部资产
 11. 敏感配置、账号和运维线索
 12. 补充文件线索：chunk/source map/H5/plugin
-13. 安全与复核事项
-14. Mermaid 结构图（如有）
-15. 可折叠原始附录
+13. 可调用脚本（仅当生成 `crypto-helper.mjs`）
+14. 安全与复核事项
 
 Each API detail should include:
 
@@ -90,5 +100,5 @@ The helper scripts use only the Node.js standard library. No `npm install` is re
 - Analyze only projects you are authorized to inspect.
 - Local reports preserve discovered values by default, including tokens, appids, internal URLs, default accounts, source-map paths, and other sensitive findings.
 - Redact only when explicitly preparing a shareable report.
-- Do not commit generated analysis output. This repository ignores `analysis-output/`, `reports/`, `evidence/`, `*.analysis-output/`, and `tests/`.
+- Do not commit generated analysis output or real-target `crypto-helper.mjs` files. This repository ignores `analysis-output/`, `reports/`, `evidence/`, `*.analysis-output/`, and `tests/`.
 - Remote downloads for chunks, source maps, H5, or supplemental files require candidate review and explicit user approval.

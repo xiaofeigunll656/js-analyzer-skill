@@ -6,9 +6,9 @@ Use this skill only for projects the user is authorized to analyze. Do not help 
 
 ## Secret Handling
 
-Default behavior is to preserve raw values in local analysis output. This is intentional for engineering handoff and authorized audits.
+Default behavior is to preserve raw values in the local `project-report.md`. This is intentional for engineering handoff and authorized audits.
 
-Use `--redact-secrets` for shareable output. Keep analysis output directories ignored by Git.
+Use explicit redaction only for shareable output. Keep analysis output directories ignored by Git, and do not commit real-target `crypto-helper.mjs` files.
 
 ## Execution Safety
 

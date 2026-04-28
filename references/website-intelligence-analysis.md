@@ -1,6 +1,6 @@
 # Website and Intelligence Analysis
 
-During the AI-led review or after any helper extraction, produce two extra summaries when useful.
+During the AI-led review, use these perspectives to enrich `project-report.md`. Do not produce extra summary files by default.
 
 ## Website Analyst Summary
 
@@ -13,14 +13,11 @@ Answer:
 - Which APIs support each journey?
 - What browser-side architecture exists: publicPath, service worker, CORS/CSP clues, WebSocket, GraphQL, upload/download?
 
-Primary artifacts:
+Where to put it:
 
-- `project-report.md`
-- `diagrams/website-flow.mmd`
-- `analysis.chunkDiscovery`
-- `analysis.sourceMapDiscovery`
-- `analysis.features`
-- `analysis.apis`
+- Summarize confirmed website/app behavior inside `project-report.md`.
+- Put weak chunk/source-map/API leads in `不确定项/待复核`.
+- Generate diagrams or structured exports only when the user explicitly asks.
 
 ## Intelligence Analyst Summary
 
@@ -32,13 +29,9 @@ Answer:
 - Which environments exist and how are they named?
 - Which findings deserve follow-up because they connect code to real infrastructure?
 
-Primary artifacts:
+Where to put it:
 
-- `diagrams/intelligence-map.mmd`
-- `analysis.externalAssets`
-- `analysis.developerSignals`
-- `analysis.operationsSignals`
-- `analysis.thirdPartyServices`
-- `analysis.configs`
+- Summarize external assets, developer signals, operations signals, third-party services, and configs inside `project-report.md`.
+- Keep scratch helper outputs out of the deliverable list.
 
 Keep claims evidence-based. Treat output as an authorized analysis aid, not as instructions to attack systems.

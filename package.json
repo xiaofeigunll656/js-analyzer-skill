@@ -1,7 +1,7 @@
 {
   "name": "js-analyzer-skill",
   "version": "0.1.0",
-  "description": "Codex-only AI-led JavaScript project analysis skill with small evidence-lead helpers.",
+  "description": "Codex-only AI-led JavaScript project analysis skill producing one Chinese report with optional crypto helper.",
   "type": "module",
   "private": true,
   "scripts": {

@@ -61,7 +61,8 @@ async function runFixture({ name, expectedApiValues, assertions }) {
     "--max-files",
     "100",
     "--max-bytes",
-    "200000"
+    "200000",
+    "--json-only"
   ]);
 
   const leads = JSON.parse(await fs.readFile(path.join(outputRoot, "codex-js-leads.json"), "utf8"));
@@ -70,8 +71,13 @@ async function runFixture({ name, expectedApiValues, assertions }) {
     assert.ok(apiValues.has(expected), `${name}: expected API lead ${expected}`);
   }
   assert.ok((leads.evidence || []).length > 0, `${name}: should emit evidence records`);
-  assert.ok(await exists(path.join(outputRoot, "codex-js-leads.md")), `${name}: should emit Markdown lead index`);
+  assert.ok(!(await exists(path.join(outputRoot, "codex-js-leads.md"))), `${name}: json-only mode should not emit Markdown lead index`);
   assertions(leads);
+  await run(process.execPath, [
+    path.join(repoRoot, "scripts", "validate-outputs.mjs"),
+    outputRoot,
+    "--json-only"
+  ]);
   console.log(`${name}: ${expectedApiValues.length} expected API leads verified; counts=${JSON.stringify(leads.leadCounts)}`);
 }
 

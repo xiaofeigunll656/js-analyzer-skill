@@ -1,9 +1,17 @@
-# Output Schema
+# Output Contract
 
-The primary output is a human `project-report.md` written by Codex. The optional machine-readable helper output is `codex-js-leads.json`, produced by:
+The required user-visible output is one Chinese `project-report.md` written by Codex.
+
+Optional user-visible output is allowed only when confirmed request/response encryption, decryption, or signing exists and a reusable script will help the user. In that case, generate one Node.js helper, preferably `crypto-helper.mjs`, beside the report and document it in `project-report.md`.
+
+Do not create user-visible Postman, OpenAPI, Mermaid, JSON, CSV, extra Markdown, screenshots, copied source, recovered bundles, or evidence dumps unless the user explicitly asks.
+
+## Scratch Lead Helper
+
+The optional machine-readable scratch helper output is `codex-js-leads.json`, produced by:
 
 ```bash
-node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name> --json-only
 ```
 
 ## `codex-js-leads.json`
@@ -43,4 +51,6 @@ Every useful finding in the final report must still be manually reviewed. Helper
 
 ## Final Report
 
-The final Markdown report may cite `codex-js-leads.json/md` as a discovery aid, but its claims must be grounded in direct source reads, source-map review, or user-provided traffic evidence.
+The final Markdown report should not list scratch helper files as deliverables. Its claims must be grounded in direct source reads, source-map review, or user-provided traffic evidence.
+
+If `crypto-helper.mjs` is generated, `project-report.md` must include the script path, commands, required inputs, exact API/wrapper usage locations, and limitations.

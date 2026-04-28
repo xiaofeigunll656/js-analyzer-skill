@@ -13,7 +13,7 @@ rg -n "sourceMappingURL|\\.js\\.map|\"sourcesContent\"|\"webpack://|/Users/|C:\\
 The helper can surface source-map hints:
 
 ```bash
-node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name>
+node scripts/codex-js-leads.mjs <target> --out analysis-output/<project-name> --json-only
 ```
 
 ## Review Rules

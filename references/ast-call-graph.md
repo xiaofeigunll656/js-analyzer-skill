@@ -1,13 +1,13 @@
-# AST and Call Graph Mode
+# AST and Call Graph Review
 
-Use call graph output to connect website pages, request wrappers, API methods, crypto helpers, and external services.
+Use call graph reasoning to connect website pages, request wrappers, API methods, crypto helpers, and external services. Do not generate a standalone call-graph artifact during default analysis.
 
 ## Modes
 
 - `lightweight-ast`: built-in parser heuristics that extract functions and call edges without third-party dependencies.
 - `babel-ast`: future/optional mode when Babel parser dependencies are installed and deeper AST traversal is needed.
 
-The CLI currently emits `analysis.callGraph` from lightweight AST-style extraction. Each edge records caller, callee, file, line, evidence, and confidence.
+When call graph evidence is useful, summarize only the important edges in `project-report.md`. Each edge should have caller, callee, file, line, evidence, and confidence.
 
 ## Analyst Uses
 

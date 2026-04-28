@@ -1,5 +1,7 @@
 # Postman and OpenAPI Rules
 
+Do not generate Postman, OpenAPI, or local HTML API workspaces during the default analysis. The default deliverable is `project-report.md`, with an optional `crypto-helper.mjs` only when confirmed crypto/signature reproduction is useful. Use these rules only when the user explicitly asks for these formats.
+
 ## Postman
 
 - Use Postman Collection v2.1 schema.

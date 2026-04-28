@@ -23,14 +23,15 @@ When the user says "analyze the xxx project under the current directory":
 3. Optionally run the small lead helper when the project is large or minified:
 
    ```bash
-   node scripts/codex-js-leads.mjs ./xxx --out ./analysis-output/xxx
+   node scripts/codex-js-leads.mjs ./xxx --out ./analysis-output/xxx --json-only
    ```
 
-4. Treat `codex-js-leads.md/json` as a reading checklist, not as the report.
+4. Treat `codex-js-leads.json` as a scratch reading checklist, not as the report or a deliverable.
 5. Search API/request/config/crypto/ops terms and inspect nearby code slices.
 6. Trace wrappers and request construction before writing the API list.
 7. Reconstruct request and response packages with evidence.
-8. Write the Markdown report in Chinese by default. It should read like a handoff report, not a raw extraction dump.
+8. Write only `project-report.md` in Chinese by default. It should read like a handoff report, not a raw extraction dump.
+9. Generate a Node.js `crypto-helper.mjs` only when confirmed request/response encryption, decryption, or signing logic needs reusable reproduction, and document its usage in the report.
 
 ## High-Signal Search Terms
 

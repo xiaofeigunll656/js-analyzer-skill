@@ -1,6 +1,6 @@
 interface:
   display_name: "JS Analyzer Skill"
-  short_description: "Codex-only JS project analysis with evidence-backed reports and small lead helpers."
-  default_prompt: "Use $js-analyzer-skill to decide how to inspect this authorized JavaScript project directly, trace request/response behavior, review sensitive information, and write a useful evidence-backed report. Use scripts/codex-js-leads.mjs only as a small evidence index when it helps Codex read the project."
+  short_description: "Codex-only JS project analysis producing one Chinese report, with optional crypto helper."
+  default_prompt: "Use $js-analyzer-skill to inspect this authorized JavaScript project directly, trace request/response behavior, review sensitive information, and write one Chinese project-report.md. Generate a Node.js crypto-helper.mjs only when confirmed request/response encryption, decryption, or signing needs reusable reproduction. Use scripts/codex-js-leads.mjs only as an internal scratch evidence index when it helps Codex read the project."
 policy:
   allow_implicit_invocation: true
